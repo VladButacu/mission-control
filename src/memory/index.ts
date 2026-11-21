@@ -4,6 +4,7 @@ import path from "node:path";
 import { readJsonFile, updateJsonFile, writeJsonFile } from "../core/infra/fs.ts";
 
 import { ensureHarnessRepository } from "../core/bootstrap/repository.ts";
+import { containedPath } from "../core/paths/contained.ts";
 import { projectDir } from "../core/projects/registry.ts";
 import { deriveExecution } from "../core/tasks/status.ts";
 import { listRuns } from "../core/tasks/runs.ts";
@@ -206,7 +207,8 @@ export async function searchMemoryIndex(
  */
 export async function removeMemoryDocument(root: string, projectId: string, slug: string): Promise<void> {
   await ensureHarnessRepository(root);
-  const file = indexPath(root, projectId);
+  const file = containedPath(root, indexPath(root, projectId));
+  if (!file) throw new Error("Memory index path must stay inside the harness root.");
   try {
     await stat(file);
   } catch {
