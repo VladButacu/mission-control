@@ -2,28 +2,11 @@ import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 
 import { normalizeSlug } from "../src/memory/store.ts";
+import { HOSTILE_PIECES } from "./helpers/hostile-pieces.ts";
 
 const SEED = 20260521;
 const NUM_RUNS = 200;
 const REFUSAL = "Memory slug must be a safe relative path.";
-
-// Pieces that mix traversal, separators, NUL, percent-encoded dots and long segments.
-const HOSTILE_PIECES = [
-  "..",
-  ".",
-  "/",
-  "/",
-  "\\",
-  "\0",
-  "%2e",
-  "%2E%2e",
-  "%2f",
-  "%5c",
-  "a".repeat(300),
-  "x",
-  "-",
-  " "
-];
 
 const hostileSlug = fc
   .array(fc.constantFrom(...HOSTILE_PIECES), { maxLength: 16 })

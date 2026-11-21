@@ -3,27 +3,11 @@ import fc from "fast-check";
 import { describe, it } from "vitest";
 
 import { containedPath } from "../src/core/paths/contained.ts";
+import { HOSTILE_PIECES } from "./helpers/hostile-pieces.ts";
 
 const BASE = path.resolve("property-root", "pages");
 const SEED = 20260521;
 const NUM_RUNS = 200;
-
-// Pieces that try to climb out of the base or hide a traversal from a naive check.
-const HOSTILE_PIECES = [
-  "..",
-  ".",
-  "/",
-  "\\",
-  "\0",
-  "%2e",
-  "%2E%2e",
-  "%2f",
-  "%5c",
-  "a".repeat(300),
-  "x",
-  "-",
-  "_"
-];
 
 const hostileCandidate = fc
   .array(fc.constantFrom(...HOSTILE_PIECES), { maxLength: 12 })
