@@ -23,6 +23,11 @@ updates:
         update-types:
           - minor
           - patch
+      npm-security-minor-and-patch:
+        applies-to: security-updates
+        update-types:
+          - minor
+          - patch
 
   - package-ecosystem: github-actions
     directory: /
@@ -35,6 +40,11 @@ updates:
       github-actions:
         patterns:
           - "*"
+        update-types:
+          - minor
+          - patch
+      github-actions-security-minor-and-patch:
+        applies-to: security-updates
         update-types:
           - minor
           - patch
