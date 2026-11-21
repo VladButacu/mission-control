@@ -62,7 +62,6 @@ describe("rate-limited CodeQL sinks", () => {
   // draft-8 policy header carries the configured limit. The requests stay
   // below the limit and fail inside the handler (no token, unknown ids).
   it.each<[string, (app: express.Express) => request.Test, number]>([
-    ["POST /api/shutdown", (app) => request(app).post("/api/shutdown"), 60],
     ["GET /api/attachments/:id", (app) => request(app).get("/api/attachments/missing"), 60],
     ["GET /api/runs/:runId/tail", (app) => request(app).get("/api/runs/run-1/tail"), 600],
     ["GET /api/runs/:runId/artifacts/:fileName", (app) => request(app).get("/api/runs/run-1/artifacts/out.txt"), 60],

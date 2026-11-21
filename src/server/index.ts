@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { createServer } from "./app.ts";
-import { generateShutdownToken, removeServerInfo, resolveHarnessRoot, stopRunningServer, writeServerInfo } from "./control.ts";
+import { removeServerInfo, resolveHarnessRoot, stopRunningServer, writeServerInfo } from "./control.ts";
 import { gracefulShutdown, setShutdownTarget } from "./lifecycle.ts";
 import { startListening } from "./listen.ts";
 import { DEFAULT_HARNESS_ROOT, ensureHarnessRepository } from "../core/bootstrap/repository.ts";
@@ -21,7 +21,7 @@ import {
 } from "../core/bootstrap/reconciliation.ts";
 
 // CLI control commands run before any server boot. `stop` runs in a separate
-// process and asks an already-running server to shut down via /api/shutdown.
+// process and sends SIGTERM to the server it finds in server.json.
 const command = process.argv[2];
 if (command === "stop" || command === "shutdown") {
   const outcome = await stopRunningServer(resolveHarnessRoot());
@@ -67,11 +67,7 @@ if (stuckPushed.reconciled > 0) {
   console.log(`Reconciled ${stuckPushed.reconciled} stuck pushed task(s) on pre-review steps.`);
 }
 
-// Per-server shutdown token: required by /api/shutdown, written to server.json
-// for `mission-control stop`, and delivered to the UI through /api/state. One
-// value, generated once at boot, flows to all three carriers.
-const shutdownToken = generateShutdownToken();
-const app = createServer({ root, staticDir, packageRoot, shutdownToken });
+const app = createServer({ root, staticDir, packageRoot });
 
 const uiIndex = path.join(staticDir, "index.html");
 if (!existsSync(uiIndex)) {
@@ -103,11 +99,11 @@ console.log(`Mission Control running at http://${host}:${port}`);
 console.log(`UI served at: http://${host}:${port}`);
 console.log(`Mission Control root: ${root}`);
 console.log(`Daemon: in-process (every ${intervalMs}ms, autonomy=${autonomy ? "on" : "off"})`);
-console.log(`Stop with Ctrl+C, the UI shutdown button, or: mission-control stop`);
+console.log(`Stop with Ctrl+C or: mission-control stop`);
 
 // Register the live server + daemon with the shared shutdown path (used by the
-// signal handlers below and by the /api/shutdown route in app.ts) and record
-// our pid/port so `mission-control stop` can reach us.
+// signal handlers below) and record our pid/port so `mission-control stop` can
+// reach us.
 const daemonHandle = startDaemonLoop({ root, intervalMs, autonomy });
 setShutdownTarget({
   server,
@@ -117,7 +113,7 @@ setShutdownTarget({
     await removeServerInfo(root);
   }
 });
-await writeServerInfo(root, { pid: process.pid, port, host, startedAt: new Date().toISOString(), shutdownToken });
+await writeServerInfo(root, { pid: process.pid, port, host, startedAt: new Date().toISOString() });
 
 // Every entry point shares one graceful path: terminate running agent
 // processes, stop the daemon, close the server, then exit.

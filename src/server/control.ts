@@ -1,16 +1,18 @@
-import { randomBytes, timingSafeEqual } from "node:crypto";
+import { execFile } from "node:child_process";
 import { readFile, rm } from "node:fs/promises";
 import path from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
+import { promisify } from "node:util";
 
 import { DEFAULT_HARNESS_ROOT } from "../core/bootstrap/repository.ts";
 import { ensureDir, writeJsonFile } from "../core/infra/fs.ts";
 
 /**
- * Cross-process shutdown control. The running server writes a small info file
- * (pid + port + host) under the harness root on startup; `mission-control stop`
- * reads it in a separate process and asks the live server to shut down via its
- * /api/shutdown endpoint. This is the CLI counterpart to the UI shutdown button
- * and shares the same graceful backend path.
+ * Cross-process stop control. The running server writes a small info file
+ * (pid + port + host) under the harness root on startup. `mission-control stop`
+ * reads it in a separate process, confirms the pid is still a Mission Control
+ * server, and sends SIGTERM. The server then runs its graceful shutdown path,
+ * which removes the info file.
  */
 
 export interface ServerInfo {
@@ -22,33 +24,20 @@ export interface ServerInfo {
   host: string;
   /** ISO timestamp the server started. */
   startedAt: string;
-  /**
-   * Unguessable per-server token a caller must present to trigger shutdown.
-   * Written to server.json so the CLI can read it; delivered to the same-origin
-   * UI via boot state. Together with the non-simple header it is sent in, this
-   * defeats CSRF (a cross-site form POST cannot set a custom header) and any
-   * remote caller that cannot read server.json.
-   */
-  shutdownToken: string;
 }
 
-/** Cryptographically random shutdown token: 256 bits, hex-encoded. */
-export function generateShutdownToken(): string {
-  return randomBytes(32).toString("hex");
-}
+const execFileAsync = promisify(execFile);
 
 /**
- * Constant-time token comparison. Returns false when either side is absent or
- * the lengths differ (the expected length is fixed per server, so the length
- * check leaks nothing an attacker could exploit). Guards the /api/shutdown
- * route against timing-based token recovery.
+ * Command lines of a Mission Control server: the source entry (`src/server/index.ts`,
+ * used by `mc`) and the bundled entry (`dist/server.js`, used by `bin/mc.js`).
+ * shortcut: matches the entry path only, so a renamed entry must update this pattern.
  */
-export function verifyShutdownToken(provided: string | undefined, expected: string | undefined): boolean {
-  if (!provided || !expected) return false;
-  const providedBuf = Buffer.from(provided);
-  const expectedBuf = Buffer.from(expected);
-  return providedBuf.length === expectedBuf.length && timingSafeEqual(providedBuf, expectedBuf);
-}
+const SERVER_COMMAND = /(?:^|[\s/])(?:src\/server\/index\.ts|dist\/server\.js)(?:\s|$)/;
+
+/** Bounded wait after SIGTERM. Covers the server's 3s force-exit grace and the 2s runner kill backstop. */
+const STOP_WAIT_MS = 10_000;
+const STOP_POLL_MS = 100;
 
 /** Location of the runtime server-info file under a harness root. */
 export function serverInfoPath(root: string): string {
@@ -79,8 +68,7 @@ export async function readServerInfo(root: string): Promise<ServerInfo | null> {
         pid: parsed.pid,
         port: parsed.port,
         host: parsed.host,
-        startedAt: typeof parsed.startedAt === "string" ? parsed.startedAt : "",
-        shutdownToken: typeof parsed.shutdownToken === "string" ? parsed.shutdownToken : ""
+        startedAt: typeof parsed.startedAt === "string" ? parsed.startedAt : ""
       };
     }
     return null;
@@ -105,15 +93,41 @@ export function isPidAlive(pid: number): boolean {
   }
 }
 
+/** True when a process command line is a Mission Control server entry. */
+export function isMissionControlCommand(command: string): boolean {
+  return SERVER_COMMAND.test(command);
+}
+
+/** Command line of a pid as reported by ps, or "" when ps cannot find it. */
+async function commandOf(pid: number): Promise<string> {
+  try {
+    const { stdout } = await execFileAsync("ps", ["-p", String(pid), "-o", "command="]);
+    return stdout.trim();
+  } catch {
+    return "";
+  }
+}
+
+/** Poll until the pid is gone. Returns false when it is still alive at the deadline. */
+async function waitForExit(pid: number, timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (isPidAlive(pid)) {
+    if (Date.now() >= deadline) return false;
+    await sleep(STOP_POLL_MS);
+  }
+  return true;
+}
+
 export interface StopOutcome {
   ok: boolean;
   message: string;
 }
 
 /**
- * Ask the running Mission Control server to shut down. Reads the server-info
- * file, POSTs to /api/shutdown, and returns a clear terminal outcome. Never
- * throws: callers print `message` and exit with `ok ? 0 : 1`.
+ * Stop the running Mission Control server with SIGTERM. Reads the server-info
+ * file and signals the recorded pid only after ps confirms it is a Mission
+ * Control server; a reused pid is left alone and its stale record is removed.
+ * Never throws: callers print `message` and exit with `ok ? 0 : 1`.
  */
 export async function stopRunningServer(root: string = resolveHarnessRoot()): Promise<StopOutcome> {
   const info = await readServerInfo(root);
@@ -126,40 +140,31 @@ export async function stopRunningServer(root: string = resolveHarnessRoot()): Pr
     await removeServerInfo(root);
     return { ok: false, message: "Mission Control is not running (cleaned up stale state)." };
   }
-
-  const url = `http://${info.host}:${info.port}/api/shutdown`;
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      // The token read from server.json proves this caller is local and
-      // authorized; sent in a non-simple header so the request is never a
-      // browser-issued simple (CSRF-capable) POST.
-      headers: { "content-type": "application/json", "x-shutdown-token": info.shutdownToken },
-      body: "{}",
-      signal: AbortSignal.timeout(5_000)
-    });
-    if (!res.ok) {
-      const reason =
-        res.status === 401
-          ? "authentication token mismatch (server.json is stale or from another instance)"
-          : `HTTP ${res.status}`;
-      return {
-        ok: false,
-        message: `Mission Control did not acknowledge shutdown (${reason} at ${url}).`
-      };
-    }
-    return {
-      ok: true,
-      message:
-        `Mission Control (pid ${info.pid}) is shutting down. ` +
-        `All running processes are being terminated and the UI at http://${info.host}:${info.port} ` +
-        `will be unavailable until you restart it from the terminal with \`mission-control\`.`
-    };
-  } catch (err) {
+  if (!isMissionControlCommand(await commandOf(info.pid))) {
+    await removeServerInfo(root);
     return {
       ok: false,
-      message: `Could not reach Mission Control at ${url}: ${(err as Error).message}. ` +
-        `If it is hung, kill pid ${info.pid} directly.`
+      message: `pid ${info.pid} in server.json is not a Mission Control server. Did not signal it; removed the stale server info.`
     };
   }
+
+  try {
+    process.kill(info.pid, "SIGTERM");
+  } catch (err) {
+    // ESRCH means it exited after the check above; the wait below reports that.
+    if ((err as NodeJS.ErrnoException).code !== "ESRCH") {
+      return { ok: false, message: `Could not signal Mission Control (pid ${info.pid}): ${(err as Error).message}` };
+    }
+  }
+
+  if (!(await waitForExit(info.pid, STOP_WAIT_MS))) {
+    return {
+      ok: false,
+      message:
+        `Mission Control (pid ${info.pid}) is still running ${STOP_WAIT_MS / 1000}s after SIGTERM. ` +
+        `It may still be shutting down; check with \`ps -p ${info.pid}\`.`
+    };
+  }
+  await removeServerInfo(root);
+  return { ok: true, message: `Mission Control (pid ${info.pid}) stopped.` };
 }
