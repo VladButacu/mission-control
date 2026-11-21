@@ -7,7 +7,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { ensureHarnessRepository } from "../src/core/bootstrap/repository.ts";
 import { onboardProject, projectDir } from "../src/core/projects/registry.ts";
-import { removeMemoryDocument } from "../src/memory/index.ts";
+import { createRun } from "../src/core/tasks/runs.ts";
+import { buildMemoryIndex, removeMemoryDocument } from "../src/memory/index.ts";
 import {
   captureMemoryPage,
   deleteMemoryPage,
@@ -69,5 +70,30 @@ describe("memory page containment", () => {
 
   it("refuses to touch the memory index for a project id that escapes the projects dir", async () => {
     await expect(removeMemoryDocument(root, "../../outside", "any")).rejects.toThrow();
+  });
+
+  it("does not index a run artifact whose name escapes the run directory", async () => {
+    const run = await createRun(root, {
+      taskId: "task-1",
+      taskTitle: "Traversal run",
+      projectId,
+      agent: "codex",
+      status: "completed",
+      startedAt: "2026-05-27T00:00:00.000Z",
+      artifacts: ["../../secret.md", "summary.md"]
+    });
+    const runDir = path.join(root, "data", "runs", run.id);
+    await mkdir(runDir, { recursive: true });
+    await writeFile(path.join(root, "data", "secret.md"), "outside the run directory", "utf8");
+    await writeFile(path.join(runDir, "summary.md"), "inside the run directory", "utf8");
+
+    const index = await buildMemoryIndex(root, projectId);
+
+    expect(index.documents.map((document) => document.content)).not.toContain("outside the run directory");
+    expect(index.documents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: `run-artifact:${run.id}:summary.md`, content: "inside the run directory" })
+      ])
+    );
   });
 });
