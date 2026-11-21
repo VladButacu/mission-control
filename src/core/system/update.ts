@@ -201,8 +201,7 @@ export async function applyUpdate(ctx: ApplyContext): Promise<{ spawned: boolean
     MC_UPDATE_HARNESS_ROOT: ctx.root,
     MC_UPDATE_STATUS_FILE: updateStatusPath(ctx.root),
     MC_UPDATE_FROM_VERSION: ctx.fromVersion ?? "",
-    MC_UPDATE_PORT: process.env["PORT"] ?? "",
-    MC_UPDATE_HOST: process.env["HARNESS_HOST"] ?? process.env["HOST"] ?? ""
+    MC_UPDATE_PORT: process.env["PORT"] ?? ""
   };
 
   const spawnFn = ctx.spawnUpdater ?? defaultSpawnUpdater;

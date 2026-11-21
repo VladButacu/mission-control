@@ -119,13 +119,14 @@ The runtime state directory contains settings, tasks, runs, generated indexes, s
 | Variable | Default | Description |
 | --- | --- | --- |
 | `PORT` | `4827` | HTTP port. |
-| `HARNESS_HOST` | `127.0.0.1` | Network interface. Use `0.0.0.0` only when you intentionally want network access. |
 | `HARNESS_ROOT` | Platform default | Runtime state directory. |
 | `HARNESS_AUTONOMY` | `1` | Enables scheduled autonomy jobs. Set `0` to disable. |
 | `HARNESS_INTERACTIVE` | `1` | Interactive PTY/TUI for plan and authoring steps. Set `0` to force headless for those steps too. |
 | `HARNESS_EXECUTION_ENV` | `native` | `native` runs against host paths; `container` expects task targets under `HARNESS_PROJECTS_ROOT`. |
 | `HARNESS_PROJECTS_ROOT` | Settings value | Root used for target suggestions and container-accessible project paths. |
 | `HARNESS_VAULT` | Platform default | Connector token store: `keychain`, `file`, or `memory`. |
+
+The server binds to loopback (127.0.0.1) only. It rejects requests with an unexpected Host or Origin header.
 
 ## Architecture
 
@@ -171,7 +172,6 @@ Workflow PR/MR creation is handled by the `create_merge_request` step, not by ad
 - Project memory is local and gitignored.
 - Agent CLIs may contact their own providers according to how those tools are configured.
 - Git provider tokens are stored through the configured vault backend.
-- Set `HARNESS_HOST=127.0.0.1` unless you intentionally want the app reachable from another machine.
 
 ## Contributing
 
