@@ -173,7 +173,7 @@ describe("connectors API", () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = async (input) => {
       const url = String(input);
-      if (url.includes("api.clickup.com")) {
+      if (URL.canParse(url) && new URL(url).hostname === "api.clickup.com") {
         remoteCalls += 1;
         if (url.endsWith("/team")) {
           return new Response(JSON.stringify({ teams: [{ id: "team-1", name: "Team" }] }), {
