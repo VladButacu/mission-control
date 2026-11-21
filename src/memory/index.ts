@@ -149,8 +149,11 @@ export async function buildMemoryIndex(
       updatedAt: run.completedAt ?? run.startedAt
     });
 
+    const runDir = containedPath(path.join(root, "data", "runs"), run.id);
+    if (!runDir) continue;
+
     for (const artifact of run.artifacts) {
-      const artifactPath = containedPath(path.join(root, "data", "runs", run.id), artifact);
+      const artifactPath = containedPath(runDir, artifact);
       if (!artifactPath) continue;
       const file = await readTextFileIfIndexable(artifactPath);
       if (!file) continue;
