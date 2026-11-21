@@ -5,6 +5,7 @@ import { rm } from "node:fs/promises";
 
 import { readJsonFile, writeJsonFile, ensureDir } from "../infra/fs.ts";
 import { ensureHarnessRepository } from "../bootstrap/repository.ts";
+import { containedPath } from "../paths/contained.ts";
 
 export interface ProjectRecord {
   id: string;
@@ -32,7 +33,11 @@ function projectsPath(root: string): string {
 }
 
 export function projectDir(root: string, projectId: string): string {
-  return path.join(root, "data", "state", "projects", projectId);
+  const dir = containedPath(path.join(root, "data", "state", "projects"), projectId);
+  if (!dir) {
+    throw new Error(`Project id escapes the projects directory: ${projectId}`);
+  }
+  return dir;
 }
 
 function now(): string {

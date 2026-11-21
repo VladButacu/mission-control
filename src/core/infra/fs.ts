@@ -1,6 +1,8 @@
 import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import { containedPath } from "../paths/contained.ts";
+
 interface FileLockOptions {
   maxAttempts?: number;
   retryDelayMs?: number;
@@ -196,9 +198,8 @@ export function safeRootPath(root: string, relativePath: string): string {
   if (path.isAbsolute(relativePath) || relativePath.includes("\0")) {
     throw new Error("Target path must be relative to the harness root.");
   }
-  const resolved = path.resolve(root, relativePath);
-  const normalizedRoot = path.resolve(root);
-  if (resolved !== normalizedRoot && !resolved.startsWith(`${normalizedRoot}${path.sep}`)) {
+  const resolved = containedPath(root, relativePath);
+  if (!resolved) {
     throw new Error("Target path must stay inside the harness root.");
   }
   return resolved;

@@ -2,6 +2,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { ensureDir } from "../../infra/fs.ts";
+import { containedPath } from "../../paths/contained.ts";
 import { resetWorkflowCache } from "../../workflows/cache.ts";
 import { workflowsDir } from "../../workflows/paths.ts";
 import {
@@ -69,7 +70,8 @@ export function runtimeAssetBackupDir(root: string): string {
 
 async function readRuntimeWorkflowText(root: string, workflowId: string): Promise<string | null> {
   for (const ext of [".yml", ".yaml"]) {
-    const filePath = path.join(workflowsDir(root), `${workflowId}${ext}`);
+    const filePath = containedPath(workflowsDir(root), `${workflowId}${ext}`);
+    if (!filePath) return null;
     try {
       return await readFile(filePath, "utf8");
     } catch {
@@ -80,8 +82,10 @@ async function readRuntimeWorkflowText(root: string, workflowId: string): Promis
 }
 
 async function readRuntimeSkillBody(root: string, skillId: string): Promise<string | null> {
+  const skillPath = containedPath(path.join(root, "skills"), path.join(skillId, "SKILL.md"));
+  if (!skillPath) return null;
   try {
-    return await readFile(path.join(root, "skills", skillId, "SKILL.md"), "utf8");
+    return await readFile(skillPath, "utf8");
   } catch {
     return null;
   }
@@ -169,13 +173,15 @@ export async function resetRuntimeAsset(
     throw new Error(`Runtime ${kind} "${id}" is not installed.`);
   }
 
-  const backupDir = path.join(runtimeAssetBackupDir(root), kind, id);
+  const backupDir = containedPath(runtimeAssetBackupDir(root), path.join(kind, id));
+  if (!backupDir) throw new Error(`Invalid ${kind} id: ${id}`);
   await ensureDir(backupDir);
   const backupPath = path.join(backupDir, `${Date.now()}.bak`);
   await writeFile(backupPath, diff.runtimeBody, "utf8");
 
   if (kind === "workflow") {
-    const filePath = path.join(workflowsDir(root), `${id}.yml`);
+    const filePath = containedPath(workflowsDir(root), `${id}.yml`);
+    if (!filePath) throw new Error(`Invalid workflow id: ${id}`);
     await ensureDir(path.dirname(filePath));
     await writeFile(filePath, diff.bundledBody, "utf8");
     const manifest = await readRuntimeAssetsManifest(root);
@@ -187,7 +193,8 @@ export async function resetRuntimeAsset(
     await writeRuntimeAssetsManifest(root, manifest);
     resetWorkflowCache();
   } else {
-    const skillPath = path.join(root, "skills", id, "SKILL.md");
+    const skillPath = containedPath(path.join(root, "skills"), path.join(id, "SKILL.md"));
+    if (!skillPath) throw new Error(`Invalid skill id: ${id}`);
     await ensureDir(path.dirname(skillPath));
     await writeFile(skillPath, diff.bundledBody, "utf8");
     const manifest = await readRuntimeAssetsManifest(root);
