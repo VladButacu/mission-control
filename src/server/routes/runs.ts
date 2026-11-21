@@ -4,6 +4,7 @@ import { Router } from "express";
 import { cleanRuns, listAllRuns } from "../../core/tasks/runs.ts";
 import { readRunEvents, subscribeRunEvents } from "../../core/runs/events.ts";
 import { inspectRunRoutingDecision } from "../../core/runs/routing-inspect.ts";
+import { containedPath } from "../../core/paths/contained.ts";
 import { deliverOperatorMessageToLiveTurn } from "../../runtime/sessions.ts";
 import { asyncRoute, param, type ServerOptions } from "./helpers.ts";
 import { stopRun } from "./run-control.ts";
@@ -93,7 +94,11 @@ export function createRunsRouter(options: ServerOptions): Router {
     asyncRoute(async (req, res) => {
       const runId = param(req.params["runId"], "runId");
       const since = Math.max(0, Number((req.query["since"] as string) ?? 0) || 0);
-      const logFile = path.join(options.root, "data", "runs", runId, "log.txt");
+      const logFile = containedPath(path.join(options.root, "data", "runs"), path.join(runId, "log.txt"));
+      if (!logFile) {
+        res.status(400).json({ error: "runId must stay inside the runs directory." });
+        return;
+      }
       try {
         const { open, stat } = await import("node:fs/promises");
         const info = await stat(logFile);
@@ -136,15 +141,15 @@ export function createRunsRouter(options: ServerOptions): Router {
   router.get(
     "/runs/:runId/artifacts/:fileName",
     asyncRoute(async (req, res) => {
-      res.sendFile(
-        path.join(
-          options.root,
-          "data",
-          "runs",
-          param(req.params["runId"], "runId"),
-          param(req.params["fileName"], "fileName")
-        )
+      const artifact = containedPath(
+        path.join(options.root, "data", "runs"),
+        path.join(param(req.params["runId"], "runId"), param(req.params["fileName"], "fileName"))
       );
+      if (!artifact) {
+        res.status(400).json({ error: "Artifact must stay inside the runs directory." });
+        return;
+      }
+      res.sendFile(artifact);
     })
   );
 

@@ -26,6 +26,7 @@ import { getIntakeSession } from "../../core/intake/intake.ts";
 import { ensureHarnessRepository } from "../../core/bootstrap/repository.ts";
 import { loadHarnessSettings, updateHarnessSettings, type HarnessSettings } from "../../core/settings.ts";
 import { completeTargets } from "../../core/paths/targets.ts";
+import { containedPath } from "../../core/paths/contained.ts";
 import { DEFAULT_WORKFLOW_ID, listWorkflowSummaries, loadWorkflow, toWorkflowMetadata } from "../../core/workflows/index.ts";
 import { loadConnectorsState } from "../../connectors/connections.ts";
 import { listAllMemoryPages } from "../../memory/store.ts";
@@ -316,8 +317,13 @@ export function createSettingsRouter(options: ServerOptions): Router {
     asyncRoute(async (req, res) => {
       const { readFile } = await import("node:fs/promises");
       const section = param(req.params["section"], "section").replace(/[^a-z0-9-]/gi, "");
+      const sectionFile = containedPath(path.join(options.root, "kernel"), `${section}.md`);
+      if (!sectionFile) {
+        res.status(404).json({ error: "Section not found." });
+        return;
+      }
       try {
-        const content = await readFile(path.join(options.root, "kernel", `${section}.md`), "utf8");
+        const content = await readFile(sectionFile, "utf8");
         res.json({ name: section, content });
       } catch {
         res.status(404).json({ error: "Section not found." });
