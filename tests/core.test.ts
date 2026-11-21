@@ -27,6 +27,12 @@ describe("core fs helpers", () => {
     expect(value).toEqual({ ok: true });
   });
 
+  it("refuses to read or write a path that resolves outside its containing root", async () => {
+    const outside = path.join(root, "..", `${path.basename(root)}-escape.json`);
+    await expect(readJsonFile(root, outside, {})).rejects.toThrow(/must stay inside/);
+    await expect(writeJsonFile(root, outside, { escaped: true })).rejects.toThrow(/must stay inside/);
+  });
+
   it("writeJsonFile round-trips structured data", async () => {
     const filePath = path.join(root, "nested", "data.json");
     await writeJsonFile(root, filePath, { count: 2, tags: ["a"] });
