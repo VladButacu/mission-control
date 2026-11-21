@@ -189,7 +189,7 @@ export function resolveCommandBinary(binaryName: string, cwd: string = process.c
   try {
     // Resolve via a LOGIN shell (-l), not an interactive one (-i). See the note
     // in getLoginEnvironment: -i grabs the controlling terminal and breaks Ctrl+C.
-    const output = execFileSync(SHELL, ["-lc", `command -v ${binaryName}`], {
+    const output = execFileSync(SHELL, ["-lc", 'command -v -- "$1"', "sh", binaryName], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
       timeout: 4000,
