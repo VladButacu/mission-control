@@ -5,6 +5,7 @@ import { setConnectorVault } from "../connectors/vault/index.ts";
 import { generateShutdownToken, verifyShutdownToken } from "./control.ts";
 import { subscribeStateEvents } from "./events.ts";
 import { beginShutdown, runShutdownTeardown } from "./lifecycle.ts";
+import { createRouteRateLimiter } from "./rate-limit.ts";
 import { createAutonomyRouter } from "./routes/autonomy.ts";
 import { createAgentConfigRouter } from "./routes/agent-config.ts";
 import { createAttachmentsRouter } from "./routes/attachments.ts";
@@ -70,7 +71,8 @@ export function createServer(options: ServerOptions): express.Express {
   app.use("/api", createVersionRouter(options));
   app.use("/api", createTerminalRouter(options));
 
-  app.post("/api/shutdown", (req, res) => {
+  const shutdownLimiter = createRouteRateLimiter(60);
+  app.post("/api/shutdown", shutdownLimiter, (req, res) => {
     // Authenticate before any side effect: the caller must present this server's
     // shutdown token in a non-simple header. A browser-issued cross-site form
     // POST cannot set a custom header (and there is no CORS preflight that would

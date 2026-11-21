@@ -8,6 +8,7 @@ import {
   isAttachmentId,
   saveUploadedAttachment
 } from "../../core/attachments/store.ts";
+import { createRouteRateLimiter } from "../rate-limit.ts";
 import { asyncRoute, param, type ServerOptions } from "./helpers.ts";
 
 interface UploadBody {
@@ -29,6 +30,7 @@ function decodeBase64Body(raw: string): Buffer {
 
 export function createAttachmentsRouter(options: ServerOptions): Router {
   const router = Router();
+  const downloadLimiter = createRouteRateLimiter(60);
 
   router.post(
     "/attachments",
@@ -67,6 +69,7 @@ export function createAttachmentsRouter(options: ServerOptions): Router {
 
   router.get(
     "/attachments/:id",
+    downloadLimiter,
     asyncRoute(async (req, res) => {
       const id = param(req.params["id"], "id");
       if (!isAttachmentId(id)) {

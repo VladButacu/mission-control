@@ -8,9 +8,12 @@ import { containedPath } from "../../core/paths/contained.ts";
 import { deliverOperatorMessageToLiveTurn } from "../../runtime/sessions.ts";
 import { asyncRoute, param, type ServerOptions } from "./helpers.ts";
 import { stopRun } from "./run-control.ts";
+import { createRouteRateLimiter } from "../rate-limit.ts";
 
 export function createRunsRouter(options: ServerOptions): Router {
   const router = Router();
+  const tailLimiter = createRouteRateLimiter(600);
+  const artifactLimiter = createRouteRateLimiter(60);
 
   router.post(
     "/runs/:runId/kill",
@@ -91,6 +94,7 @@ export function createRunsRouter(options: ServerOptions): Router {
 
   router.get(
     "/runs/:runId/tail",
+    tailLimiter,
     asyncRoute(async (req, res) => {
       const runId = param(req.params["runId"], "runId");
       const since = Math.max(0, Number((req.query["since"] as string) ?? 0) || 0);
@@ -140,6 +144,7 @@ export function createRunsRouter(options: ServerOptions): Router {
 
   router.get(
     "/runs/:runId/artifacts/:fileName",
+    artifactLimiter,
     asyncRoute(async (req, res) => {
       const artifact = containedPath(
         path.join(options.root, "data", "runs"),

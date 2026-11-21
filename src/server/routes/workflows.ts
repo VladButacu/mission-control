@@ -16,6 +16,7 @@ import {
   type WorkflowDefinition
 } from "../../core/workflows/index.ts";
 import { asyncRoute, param, type ServerOptions } from "./helpers.ts";
+import { createRouteRateLimiter } from "../rate-limit.ts";
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -41,6 +42,7 @@ function persistWorkflow(root: string, def: WorkflowDefinition): Promise<Workflo
 
 export function createWorkflowsRouter(options: ServerOptions): Router {
   const router = Router();
+  const deleteLimiter = createRouteRateLimiter(60);
 
   router.get(
     "/workflows",
@@ -151,6 +153,7 @@ export function createWorkflowsRouter(options: ServerOptions): Router {
 
   router.delete(
     "/workflows/:id",
+    deleteLimiter,
     asyncRoute(async (req, res) => {
       const id = param(req.params["id"], "id");
       if (id === DEFAULT_WORKFLOW_ID) {

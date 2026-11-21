@@ -36,9 +36,11 @@ import { listTasks } from "../../core/tasks/tasks.ts";
 import { listInflightTaskIds } from "../../runtime/sessions.ts";
 import { listInteractiveWaits } from "../../terminal/interactive-control.ts";
 import { asyncRoute, param, type ServerOptions } from "./helpers.ts";
+import { createRouteRateLimiter } from "../rate-limit.ts";
 
 export function createSettingsRouter(options: ServerOptions): Router {
   const router = Router();
+  const kernelLimiter = createRouteRateLimiter(60);
 
   router.get(
     "/state",
@@ -314,6 +316,7 @@ export function createSettingsRouter(options: ServerOptions): Router {
 
   router.get(
     "/kernel/:section",
+    kernelLimiter,
     asyncRoute(async (req, res) => {
       const { readFile } = await import("node:fs/promises");
       const section = param(req.params["section"], "section").replace(/[^a-z0-9-]/gi, "");
