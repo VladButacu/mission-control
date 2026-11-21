@@ -1,6 +1,7 @@
 import type { Server as HttpServer, IncomingMessage } from "node:http";
 import { WebSocketServer, type WebSocket } from "ws";
 
+import { checkHost, checkOrigin } from "../server/host-guard.ts";
 import { parseClientMessage, type TerminalServerMessage } from "./protocol.ts";
 import type { SessionManager } from "./session-manager.ts";
 
@@ -8,18 +9,6 @@ const WS_PATH = "/api/terminal/ws";
 
 export interface AttachTerminalOptions {
   manager: SessionManager;
-  /**
-   * When the server is bound beyond loopback, require this token via
-   * `?token=` or `Sec-WebSocket-Protocol` for upgrades.
-   */
-  authToken?: string;
-  /** Host the HTTP server listens on (for loopback-only auth skip). */
-  listenHost?: string;
-}
-
-function isLoopbackHost(host: string | undefined): boolean {
-  if (!host) return true;
-  return host === "127.0.0.1" || host === "localhost" || host === "::1";
 }
 
 function sessionIdFromUrl(url: string | undefined): string | null {
@@ -32,23 +21,6 @@ function sessionIdFromUrl(url: string | undefined): string | null {
   } catch {
     return null;
   }
-}
-
-function tokenFromRequest(req: IncomingMessage, url: string | undefined): string | null {
-  if (url) {
-    try {
-      const parsed = new URL(url, "http://localhost");
-      const q = parsed.searchParams.get("token");
-      if (q) return q;
-    } catch {
-      /* ignore */
-    }
-  }
-  const proto = req.headers["sec-websocket-protocol"];
-  if (typeof proto === "string" && proto.length > 0) {
-    return proto.split(",")[0]?.trim() ?? null;
-  }
-  return null;
 }
 
 function send(ws: WebSocket, msg: TerminalServerMessage): void {
@@ -74,20 +46,23 @@ export function attachTerminalWebSocketServer(
     const url = req.url ?? "";
     if (!url.startsWith(WS_PATH)) return;
 
+    // Host-rebinding and cross-site guard runs before the session lookup. Origin
+    // is checked only when the browser sends one (non-browser clients omit it).
+    const hostVerdict = checkHost(req.headers.host);
+    const verdict = hostVerdict.allowed
+      ? checkOrigin(req.headers.origin, req.headers.host)
+      : hostVerdict;
+    if (!verdict.allowed) {
+      socket.write("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
+      socket.destroy();
+      return;
+    }
+
     const sessionId = sessionIdFromUrl(url);
     if (!sessionId) {
       socket.write("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");
       socket.destroy();
       return;
-    }
-
-    if (!isLoopbackHost(options.listenHost)) {
-      const token = tokenFromRequest(req, url);
-      if (!options.authToken || token !== options.authToken) {
-        socket.write("HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n");
-        socket.destroy();
-        return;
-      }
     }
 
     const session = options.manager.get(sessionId);

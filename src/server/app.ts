@@ -5,6 +5,7 @@ import { setConnectorVault } from "../connectors/vault/index.ts";
 import { generateShutdownToken, verifyShutdownToken } from "./control.ts";
 import { subscribeStateEvents } from "./events.ts";
 import { beginShutdown, runShutdownTeardown } from "./lifecycle.ts";
+import { checkRequest } from "./host-guard.ts";
 import { createRouteRateLimiter } from "./rate-limit.ts";
 import { createAutonomyRouter } from "./routes/autonomy.ts";
 import { createAgentConfigRouter } from "./routes/agent-config.ts";
@@ -31,6 +32,18 @@ export function createServer(options: ServerOptions): express.Express {
   if (options.vault) {
     setConnectorVault(options.vault);
   }
+
+  // First middleware: rejects DNS-rebinding Hosts and cross-site Origins before
+  // any route, SSE stream, or static file is reached. Answers itself (no
+  // next(err)) so the final error handler cannot turn the 403 into a 400.
+  app.use((req, res, next) => {
+    const verdict = checkRequest({ method: req.method, host: req.headers.host, origin: req.headers.origin });
+    if (verdict.allowed) {
+      next();
+      return;
+    }
+    res.status(403).json({ error: verdict.reason });
+  });
 
   // Per-server shutdown token. Resolved once here so the /api/shutdown guard and
   // the /api/state boot payload (which the same-origin UI reads and echoes back)

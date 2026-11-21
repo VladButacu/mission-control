@@ -3,7 +3,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { createServer } from "./app.ts";
-import { resolveListenHost } from "./bind-address.ts";
 import { generateShutdownToken, removeServerInfo, resolveHarnessRoot, stopRunningServer, writeServerInfo } from "./control.ts";
 import { gracefulShutdown, setShutdownTarget } from "./lifecycle.ts";
 import { startListening } from "./listen.ts";
@@ -37,7 +36,7 @@ const packageRoot =
   process.env["HARNESS_PACKAGE_ROOT"] ??
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const staticDir = path.join(packageRoot, "dist", "ui");
-const host = resolveListenHost();
+const host = "127.0.0.1";
 const port = Number(process.env["PORT"] ?? 4827);
 const intervalMs = Number(process.env["HARNESS_DAEMON_INTERVAL_MS"] ?? 5000);
 const autonomy = process.env["HARNESS_AUTONOMY"] !== "0";
@@ -92,9 +91,7 @@ const server = await startListening(app, port, host);
 // Failures to load node-pty are logged but do not block the API/UI.
 try {
   attachTerminalWebSocketServer(server, {
-    manager: getTerminalSessionManager(),
-    listenHost: host,
-    authToken: shutdownToken
+    manager: getTerminalSessionManager()
   });
 } catch (err) {
   console.warn(
