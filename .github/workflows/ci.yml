@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Cancel superseded runs on the same ref.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    # Full quality gate on the active Node LTS. This package ships compiled JS,
+    # so a single lane on Node 22 (Ubuntu) covers the real risk surface; the
+    # cross-platform paths are unit-tested.
+    name: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Suppress git defaultBranchName advice
+        run: git config --global init.defaultBranch main
+      - name: Setup Node 22
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Quality gate (lint, typecheck, test, knip, build)
+        run: npm run check

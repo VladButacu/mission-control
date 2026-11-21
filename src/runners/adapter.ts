@@ -1,0 +1,204 @@
+import path from "node:path";
+
+import type { EffortLevel } from "../core/types.ts";
+import type { AgentToolConfig, ModelPoolConfig } from "../core/agents/config/types.ts";
+
+export interface LaunchRequest {
+  mode: "execute" | "plan" | "classify";
+  prompt: string;
+  cwd: string;
+  effort?: EffortLevel;
+  sessionId?: string;
+  /** Extra directories the agent may touch (claude --add-dir). */
+  allowedDirs?: string[];
+  /** Run as a live bidirectional session (persistent stdin, stream-json input). */
+  live?: boolean;
+}
+
+export interface LaunchSpec {
+  args: string[];
+  env: Record<string, string>;
+  /** When false, the prompt is passed as a CLI arg instead of on stdin (grok). */
+  promptOnStdin: boolean;
+  /**
+   * When true, the prompt and operator messages are delivered as stream-json
+   * user messages on a persistent stdin (Claude live mode), not as plain text.
+   */
+  inputStreamJson?: boolean;
+}
+
+export type RuntimeCapabilityProbe = Record<string, boolean>;
+
+function uniqueDirs(request: LaunchRequest): string[] {
+  const dirs = new Set<string>([path.resolve(request.cwd)]);
+  for (const dir of request.allowedDirs ?? []) {
+    if (dir) dirs.add(path.resolve(dir));
+  }
+  return [...dirs];
+}
+
+function grokArgs(tool: AgentToolConfig, pool: ModelPoolConfig, request: LaunchRequest): LaunchSpec {
+  const isReadOnly = request.mode !== "execute";
+  const cli = tool.cli;
+  const args = [
+    "--single",
+    request.prompt,
+    "--output-format",
+    cli.outputFormat ?? "streaming-json",
+    "--permission-mode",
+    (isReadOnly ? cli.permissionModes?.plan : cli.permissionModes?.execute) ??
+      (isReadOnly ? "plan" : "bypassPermissions"),
+    "--cwd",
+    request.cwd,
+    ...pool.modelArgs
+  ];
+  if (!isReadOnly && cli.alwaysApproveInExecute) args.push("--always-approve");
+  if (request.sessionId) args.push("--resume", request.sessionId);
+  return { args, env: { ...pool.modelEnv }, promptOnStdin: false };
+}
+
+function claudeArgs(
+  tool: AgentToolConfig,
+  pool: ModelPoolConfig,
+  request: LaunchRequest,
+  runtimeCapabilities: RuntimeCapabilityProbe = {}
+): LaunchSpec {
+  const cli = tool.cli;
+  const live = request.live === true;
+  const args = [
+    "-p",
+    "--output-format",
+    "stream-json",
+    "--input-format",
+    live ? "stream-json" : "text",
+    "--verbose",
+    ...(live && runtimeCapabilities["partialMessages"] === true ? ["--include-partial-messages"] : []),
+    // "classify" runs read-only without plan mode (which forces a planning
+    // document); default permission denies mutations in headless -p runs.
+    ...(request.mode === "execute"
+      ? ["--dangerously-skip-permissions"]
+      : ["--permission-mode", request.mode === "classify" ? "default" : "plan"])
+  ];
+  if (runtimeCapabilities["addDir"] !== false) {
+    for (const dir of uniqueDirs(request)) args.push("--add-dir", dir);
+  }
+  if (request.effort && cli.effortFlag) args.push(cli.effortFlag, request.effort);
+  args.push(...pool.modelArgs);
+  if (request.sessionId) args.push("--resume", request.sessionId);
+  return { args, env: { ...pool.modelEnv }, promptOnStdin: true, ...(live ? { inputStreamJson: true } : {}) };
+}
+
+function codexArgs(tool: AgentToolConfig, pool: ModelPoolConfig, request: LaunchRequest): LaunchSpec {
+  const isReadOnly = request.mode !== "execute";
+  const cli = tool.cli;
+  const sandbox = isReadOnly
+    ? cli.permissionModes?.plan ?? "read-only"
+    : cli.permissionModes?.execute ?? "workspace-write";
+  const effortConfig =
+    cli.effortConfigKey && request.effort ? [`-c`, `${cli.effortConfigKey}=${request.effort}`] : [];
+  const outputArgs = ["--json", "--skip-git-repo-check"];
+  if (request.sessionId) {
+    // `exec resume` rejects -C/-s; cwd is pinned by the spawn cwd.
+    return {
+      args: ["exec", "resume", request.sessionId, ...outputArgs, ...effortConfig, ...pool.modelArgs],
+      env: { ...pool.modelEnv },
+      promptOnStdin: true
+    };
+  }
+  return {
+    args: ["exec", ...outputArgs, "-C", request.cwd, ...effortConfig, "-s", sandbox, ...pool.modelArgs],
+    env: { ...pool.modelEnv },
+    promptOnStdin: true
+  };
+}
+
+function opencodeArgs(tool: AgentToolConfig, pool: ModelPoolConfig, request: LaunchRequest): LaunchSpec {
+  const isReadOnly = request.mode !== "execute";
+  const cli = tool.cli;
+  const args = [
+    "run",
+    "--format",
+    cli.outputFormat ?? "json",
+    "--dir",
+    request.cwd,
+    ...pool.modelArgs
+  ];
+  if (!isReadOnly) {
+    args.push("--dangerously-skip-permissions");
+  }
+  if (request.effort && cli.effortFlag && !isReadOnly) args.push(cli.effortFlag, request.effort);
+  if (request.sessionId) args.push("--session", request.sessionId);
+  return { args, env: { ...pool.modelEnv }, promptOnStdin: true };
+}
+
+function substituteToken(token: string, pool: ModelPoolConfig, request: LaunchRequest): string[] {
+  switch (token) {
+    case "{prompt}":
+      return [request.prompt];
+    case "{cwd}":
+      return [request.cwd];
+    case "{model}":
+      return [...pool.modelArgs];
+    case "{effort}":
+      return request.effort ? [request.effort] : [];
+    case "{session}":
+      return request.sessionId ? [request.sessionId] : [];
+    default:
+      return [token];
+  }
+}
+
+/** Generic adapter: expand the tool's command template, injecting model args/env. */
+function genericArgs(tool: AgentToolConfig, pool: ModelPoolConfig, request: LaunchRequest): LaunchSpec {
+  const isReadOnly = request.mode !== "execute";
+  const template = isReadOnly ? tool.readOnlyCommandTemplate ?? tool.commandTemplate : tool.commandTemplate;
+  if (isReadOnly && !tool.readOnlyCommandTemplate && !tool.cli.permissionModes?.plan) {
+    throw new Error(
+      `Tool "${tool.id}" cannot enforce read-only ${request.mode} mode: configure readOnlyCommandTemplate or cli.permissionModes.plan.`
+    );
+  }
+
+  if (!template?.length) {
+    throw new Error(`Tool "${tool.id}" has no command template for ${request.mode} mode.`);
+  }
+  const args: string[] = [];
+  for (const token of template) {
+    args.push(...substituteToken(token, pool, request));
+  }
+  // If the template never consumes {model}, still inject model args so model
+  // selection is honored for tools that don't template it explicitly.
+  if (!template.includes("{model}")) args.push(...pool.modelArgs);
+
+  const executeOnlyFlags = new Set(["--dangerously-skip-permissions", "--always-approve"]);
+  const filtered = isReadOnly ? args.filter((arg) => !executeOnlyFlags.has(arg)) : args;
+  if (isReadOnly && !tool.readOnlyCommandTemplate) filtered.push("--permission-mode", tool.cli.permissionModes!.plan!);
+
+  const promptOnStdin = !template.includes("{prompt}");
+  return { args: filtered, env: { ...pool.modelEnv }, promptOnStdin };
+}
+
+/**
+ * Build the launch args/env for a tool + model pool. Built-in adapters preserve
+ * their bespoke CLI behavior; `generic` expands the tool's command template.
+ */
+export function buildLaunchArgs(
+  tool: AgentToolConfig,
+  pool: ModelPoolConfig,
+  request: LaunchRequest,
+  runtimeCapabilities: RuntimeCapabilityProbe = {}
+): LaunchSpec {
+  switch (tool.adapter) {
+    case "grok":
+      return grokArgs(tool, pool, request);
+    case "claude":
+      return claudeArgs(tool, pool, request, runtimeCapabilities);
+    case "codex":
+      return codexArgs(tool, pool, request);
+    case "opencode":
+      return opencodeArgs(tool, pool, request);
+    case "generic":
+      return genericArgs(tool, pool, request);
+    case "acp":
+      throw new Error("ACP agents run via AcpAgentRunner, not buildLaunchArgs.");
+  }
+}

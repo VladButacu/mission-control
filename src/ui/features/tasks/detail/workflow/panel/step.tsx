@@ -1,0 +1,486 @@
+import { api } from "@ui/data/api.js";
+import { useState } from "preact/hooks";
+import { requestRefresh } from "@ui/data/refresh.js";
+import { toast, errorToast } from "@ui/overlays/toast.js";
+import { confirm } from "@ui/overlays/confirm.js";
+import { taskIsRunning } from "@ui/app/task-status.js";
+import {
+  effectiveTaskEffort,
+  isStepActive,
+  modelPoolDisplayName,
+  preferredStepModelPool,
+  resolvedStepAgent,
+  stepAgentCapacityNote,
+  stepRunForStep,
+  stepRunModelPoolId,
+  ui,
+  workflowStepAgent
+} from "@ui/app/state.js";
+import { StepChat } from "./step-chat.js";
+import { StepSettingMenu, type StepSettingOption } from "./step-setting-menu.js";
+import { agentVisual, effortBarSpec, type AgentVisual } from "./step-setting-visual.js";
+import { AgentLogo, isKnownAgentLogo } from "./agent-logo.js";
+import { EFFORT_OPTIONS } from "@ui/features/workflows/options.js";
+import { WorkflowEmptyState } from "./empty-state.js";
+import { MergeRequestChip } from "@ui/shared/components/task-chips.js";
+import { AttachmentChips } from "@ui/shared/components/attachments.js";
+import { TerminalPane } from "@ui/shared/components/terminal-pane.js";
+import { RoutingDecisionPanel } from "./routing-panel.js";
+import type { AgentSummary, HarnessTask, WorkflowSummary } from "@ui/app/types.js";
+
+function settingSwatch(visual: AgentVisual) {
+  return (
+    <span class="wf-setting-swatch" style={{ background: visual.color }}>
+      {visual.initial}
+    </span>
+  );
+}
+
+function agentLeading(id: string | null | undefined, displayName?: string) {
+  if (isKnownAgentLogo(id)) {
+    return <AgentLogo id={id} title={displayName ?? id} />;
+  }
+  return settingSwatch(agentVisual(id, displayName));
+}
+
+function settingBars(levels: readonly string[], current: string) {
+  return (
+    <span class="wf-setting-bars" aria-hidden="true">
+      {effortBarSpec(levels, current).map((bar, i) => (
+        <i key={i} class={bar.on ? "on" : ""} style={{ height: `${bar.height}px` }} />
+      ))}
+    </span>
+  );
+}
+
+async function runNodeAction(taskId: string, stepId: string, action: "approve"): Promise<void> {
+  try {
+    await api(`/api/tasks/${taskId}/workflow-step`, {
+      method: "POST",
+      body: JSON.stringify({ stepId, action })
+    });
+    toast(`Step ${action} applied`, { tone: "success" });
+    requestRefresh();
+  } catch (err) {
+    errorToast((err as Error).message);
+  }
+}
+
+async function completeInteractiveTurn(
+  taskId: string,
+  outcome: "done" | "blocked",
+  note: string
+): Promise<void> {
+  await api(`/api/tasks/${taskId}/interactive/complete`, {
+    method: "POST",
+    body: JSON.stringify({
+      outcome,
+      ...(note.trim() ? { note: note.trim() } : {})
+    })
+  });
+  toast(outcome === "done" ? "Step marked done" : "Step blocked", { tone: "success" });
+  requestRefresh();
+}
+
+async function setStepAgent(taskId: string, stepId: string, agent: string): Promise<void> {
+  try {
+    if (agent) {
+      await api(`/api/tasks/${taskId}/stage-agents/${encodeURIComponent(stepId)}`, {
+        method: "POST",
+        body: JSON.stringify({ agent })
+      });
+      toast(`Agent set to ${agent} for this step`, { tone: "success" });
+    } else {
+      await api(`/api/tasks/${taskId}/stage-agents/${encodeURIComponent(stepId)}`, {
+        method: "DELETE"
+      });
+      toast("Using workflow default agent for this step", { tone: "success" });
+    }
+    requestRefresh();
+  } catch (err) {
+    errorToast((err as Error).message);
+  }
+}
+
+async function setStepEffort(taskId: string, stepId: string, effort: string): Promise<void> {
+  try {
+    if (effort) {
+      await api(`/api/tasks/${taskId}/stage-effort/${encodeURIComponent(stepId)}`, {
+        method: "POST",
+        body: JSON.stringify({ effort })
+      });
+      toast(`Effort set to ${effort} for this step`, { tone: "success" });
+    } else {
+      await api(`/api/tasks/${taskId}/stage-effort/${encodeURIComponent(stepId)}`, {
+        method: "DELETE"
+      });
+      toast("Using default effort for this step", { tone: "success" });
+    }
+    requestRefresh();
+  } catch (err) {
+    errorToast((err as Error).message);
+  }
+}
+
+async function setStepModel(taskId: string, stepId: string, poolId: string): Promise<void> {
+  try {
+    if (poolId) {
+      const preview = await api<{ warnings?: Array<{ message: string; requiresConfirmation: boolean }> }>(
+        `/api/tasks/${taskId}/stage-model-pools/${encodeURIComponent(stepId)}/preview`,
+        { method: "POST", body: JSON.stringify({ poolId }) }
+      );
+      const warnings = preview?.warnings?.filter((warning) => warning.requiresConfirmation) ?? [];
+      if (warnings.length) {
+        const ok = await confirm({
+          title: "Pin this model?",
+          message: warnings.map((warning) => warning.message).join(" "),
+          confirmLabel: "Pin anyway",
+          tone: "danger"
+        });
+        if (!ok) return;
+        await api(`/api/tasks/${taskId}/stage-model-pools/${encodeURIComponent(stepId)}`, {
+          method: "POST",
+          body: JSON.stringify({ poolId, acknowledgeWarnings: true })
+        });
+      } else {
+        await api(`/api/tasks/${taskId}/stage-model-pools/${encodeURIComponent(stepId)}`, {
+          method: "POST",
+          body: JSON.stringify({ poolId })
+        });
+      }
+      toast("Model pinned for this step", { tone: "success" });
+    } else {
+      await api(`/api/tasks/${taskId}/stage-model-pools/${encodeURIComponent(stepId)}`, {
+        method: "DELETE"
+      });
+      toast("Using default model for this step", { tone: "success" });
+    }
+    requestRefresh();
+  } catch (err) {
+    errorToast((err as Error).message);
+  }
+}
+
+export function WorkflowStepPanel({
+  task,
+  workflow,
+  stepId
+}: {
+  task: HarnessTask;
+  workflow: WorkflowSummary;
+  stepId: string | null;
+}) {
+  const [completeBusy, setCompleteBusy] = useState(false);
+  const [draft, setDraft] = useState("");
+
+  if (!stepId) {
+    return (
+      <div class="wf-pane">
+        <WorkflowEmptyState
+          icon="search"
+          title="No step selected"
+          body="Select a step on the canvas to see its agent, settings, and conversation."
+        />
+      </div>
+    );
+  }
+
+  const step = workflow.steps[stepId];
+  if (!step) {
+    return (
+      <div class="wf-pane">
+        <WorkflowEmptyState
+          icon="alert-triangle"
+          title="Unknown step"
+          body="This step is not part of the current workflow definition."
+        />
+      </div>
+    );
+  }
+
+  const capacityNote = stepAgentCapacityNote(task, stepId);
+  const defaultAgent = workflowStepAgent(task, stepId);
+  const agents = ui.data?.agents ?? [];
+  const agentById = (id: string): AgentSummary | undefined => agents.find((a) => a.id === id);
+  const selectedAgent = task.stageAgentOverrides?.[stepId] ?? "";
+  const hasAgent = step.agent !== "none";
+  const effectiveAgentId = resolvedStepAgent(task, stepId) ?? "";
+  const effectiveAgent = agentById(effectiveAgentId);
+  const agentTriggerLabel = effectiveAgent?.displayName ?? (effectiveAgentId || "—");
+  const agentOptions: StepSettingOption[] = [
+    {
+      value: "",
+      label: "Workflow default",
+      leading: settingSwatch({ color: "var(--ink-faint)", initial: "·" }),
+      meta: defaultAgent ? (agentById(defaultAgent)?.displayName ?? defaultAgent) : undefined
+    },
+    ...agents.map((a) => ({
+      value: a.id,
+      label: a.displayName,
+      leading: agentLeading(a.id, a.displayName)
+    }))
+  ];
+
+  const effortLevels = EFFORT_OPTIONS;
+  const showEffort = hasAgent && Boolean(effectiveAgent?.supportsEffort);
+  const selectedEffort = task.stageEffortOverrides?.[stepId] ?? "";
+  const effectiveEffort = effectiveTaskEffort(task, stepId) ?? "";
+  const effortOptions: StepSettingOption[] = [
+    {
+      value: "",
+      label: "Task default",
+      leading: settingBars(effortLevels, effectiveEffort),
+      meta: effectiveEffort || undefined
+    },
+    ...effortLevels.map((level) => ({
+      value: level,
+      label: level,
+      leading: settingBars(effortLevels, level)
+    }))
+  ];
+
+  const isRunning = taskIsRunning(task);
+  const approved = task.workflowRun?.stepApprovals[stepId]?.status === "approved";
+  const needsApproval = step.approval === "required" && !approved;
+  const isActive = isStepActive(task, stepId);
+  // Model recorded on the run that executed this step (completed or active);
+  // falls back to the live run only for the step currently in flight.
+  const stepModel = modelPoolDisplayName(stepRunModelPoolId(task, stepId));
+  // An earlier, completed, non-terminal step can be reopened with a fresh message.
+  const canRevertStep = !isActive
+    && step.kind !== "terminal"
+    && Boolean(task.workflowRun?.completedSteps.includes(stepId));
+  // Specific models (those that pin a --model). The no-arg "default" pool is
+  // excluded — it is what "" (Default) resolves to, so listing it would duplicate.
+  const stepModelPools = (ui.data?.agentConfig?.pools ?? []).filter(
+    (p) => p.toolId === effectiveAgentId && p.enabled && p.modelArgs.length > 0
+  );
+  const selectedModelPool = task.stageModelPoolOverrides?.[stepId] ?? "";
+  const workflowModelPool = preferredStepModelPool(task, stepId);
+  const effectiveModelPoolId = selectedModelPool || workflowModelPool || "";
+  const chosenPool = stepModelPools.find((p) => p.id === effectiveModelPoolId);
+  const modelTriggerLabel = chosenPool?.displayName ?? stepModel ?? "default";
+  const modelOptions: StepSettingOption[] = [
+    {
+      value: "",
+      label: "Default",
+      leading: settingSwatch({ color: "var(--ink-faint)", initial: "·" }),
+      meta: stepModel ?? undefined
+    },
+    ...stepModelPools.map((p) => ({
+      value: p.id,
+      label: p.displayName,
+      leading: settingSwatch({
+        color: "var(--ink-faint)",
+        initial: (p.displayName[0] ?? "·").toUpperCase()
+      })
+    }))
+  ];
+  const showModelMenu = hasAgent && (stepModelPools.length > 0 || Boolean(selectedModelPool));
+  const stepRun = stepRunForStep(task, stepId);
+  const interactiveStep = hasAgent && (step.kind === "agent_turn" || step.kind === "conversation");
+  const interactiveSessionId = (ui.data?.interactiveSessions ?? []).find((s) => s.taskId === task.id)
+    ?.terminalSessionId;
+  const showInteractiveComplete = interactiveStep && isActive && Boolean(interactiveSessionId);
+  const showSettingsActions =
+    needsApproval || canRevertStep || showInteractiveComplete || Boolean(task.mergeRequest);
+
+  async function onInteractiveComplete(outcome: "done" | "blocked"): Promise<void> {
+    if (completeBusy) return;
+    setCompleteBusy(true);
+    try {
+      await completeInteractiveTurn(task.id, outcome, "");
+    } catch (err) {
+      errorToast((err as Error).message);
+    } finally {
+      setCompleteBusy(false);
+    }
+  }
+
+  async function onApproveStep(): Promise<void> {
+    if (!stepId) return;
+    if (draft.trim()) {
+      const ok = await confirm({
+        title: "Discard unsent message?",
+        message: "You have an unsent message for this step. Approving discards it.",
+        confirmLabel: "Discard & approve",
+        tone: "danger"
+      });
+      if (!ok) return;
+      setDraft("");
+    }
+    await runNodeAction(task.id, stepId, "approve");
+  }
+
+  async function onRevertAndResume(): Promise<void> {
+    if (isRunning || !stepId) return;
+    const label = stepId.replace(/_/g, " ");
+    const ok = await confirm({
+      title: `Revert to ${label} and resume?`,
+      message: "Downstream progress and artifacts are discarded, and this step is restarted.",
+      confirmLabel: "Revert & resume",
+      tone: "danger"
+    });
+    if (!ok) return;
+    try {
+      await api(`/api/tasks/${task.id}/revert-step`, {
+        method: "POST",
+        body: JSON.stringify({ stepId, run: true })
+      });
+      toast(`Reverted to ${label}`, { tone: "success" });
+      requestRefresh();
+    } catch (err) {
+      errorToast((err as Error).message);
+    }
+  }
+
+  return (
+    <div class={`wf-pane${interactiveStep ? " is-terminal" : ""}`}>
+      <div class="wf-details">
+        <div class="wf-detail wide wf-step-meta">
+          <span class="chip wf-step-kind">{step.kind.replace(/_/g, " ")}</span>
+          {step.kind === "review" && task.reviewState ? (
+            <span class="wf-review-verdict">
+              {`Reviewer: ${task.reviewState.replace(/_/g, " ")}${task.reviewRounds && task.reviewRounds > 0 ? ` · round ${task.reviewRounds}` : ""}`}
+            </span>
+          ) : null}
+        </div>
+        <div class="wf-detail wide wf-settings-line">
+          <div class="wf-settings-core" role="group" aria-label="Agent settings">
+            <div class="wf-setting-cell">
+              <span class="k">Agent</span>
+              <span class="v">
+                {hasAgent ? (
+                  <StepSettingMenu
+                    label="Agent for this step"
+                    heading="Agent for this step"
+                    options={agentOptions}
+                    selected={selectedAgent}
+                    triggerLeading={agentLeading(effectiveAgentId, effectiveAgent?.displayName)}
+                    triggerLabel={agentTriggerLabel}
+                    onSelect={(value) => void setStepAgent(task.id, stepId, value)}
+                  />
+                ) : (
+                  <span class="mono">—</span>
+                )}
+                {capacityNote ? <span class="muted wf-agent-capacity">{capacityNote}</span> : null}
+              </span>
+            </div>
+            {showModelMenu || stepModel ? (
+              <div class="wf-setting-cell">
+                <span class="k">Model</span>
+                <span class="v">
+                  {showModelMenu ? (
+                    <StepSettingMenu
+                      label="Model for this step"
+                      heading="Model for this step"
+                      options={modelOptions}
+                      selected={selectedModelPool}
+                      triggerLeading={settingSwatch({ color: "var(--ink-faint)", initial: "·" })}
+                      triggerLabel={modelTriggerLabel}
+                      onSelect={(value) => void setStepModel(task.id, stepId, value)}
+                    />
+                  ) : (
+                    <span class="mono">{stepModel}</span>
+                  )}
+                </span>
+              </div>
+            ) : null}
+            {showEffort ? (
+              <div class="wf-setting-cell">
+                <span class="k">Effort</span>
+                <span class="v">
+                  <StepSettingMenu
+                    label="Reasoning effort for this step"
+                    heading="Reasoning effort"
+                    options={effortOptions}
+                    selected={selectedEffort}
+                    triggerLeading={settingBars(effortLevels, effectiveEffort)}
+                    triggerLabel={effectiveEffort || "default"}
+                    onSelect={(value) => void setStepEffort(task.id, stepId, value)}
+                  />
+                </span>
+              </div>
+            ) : null}
+          </div>
+          {showSettingsActions ? (
+            <div class="wf-settings-actions">
+              {task.mergeRequest ? (
+                <MergeRequestChip mergeRequest={task.mergeRequest} />
+              ) : null}
+              {needsApproval ? (
+                <button
+                  type="button"
+                  class="btn btn-sm btn-primary"
+                  disabled={!isActive || isRunning}
+                  title={
+                    !isActive
+                      ? "This step is not the active decision point."
+                      : isRunning
+                        ? "Wait for the agent to finish before approving."
+                        : undefined
+                  }
+                  onClick={() => void onApproveStep()}
+                >
+                  Approve step
+                </button>
+              ) : null}
+              {showInteractiveComplete ? (
+                <>
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-primary"
+                    disabled={completeBusy}
+                    onClick={() => void onInteractiveComplete("done")}
+                  >
+                    Done
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-danger"
+                    disabled={completeBusy}
+                    onClick={() => void onInteractiveComplete("blocked")}
+                  >
+                    Block
+                  </button>
+                </>
+              ) : null}
+              {canRevertStep ? (
+                <button
+                  type="button"
+                  class="btn btn-sm btn-danger"
+                  disabled={isRunning}
+                  onClick={() => void onRevertAndResume()}
+                >
+                  Revert & resume
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+        {task.attachments?.length ? (
+          <div class="wf-detail wide">
+            <span class="k">Attachments</span>
+            <span class="v">
+              <AttachmentChips attachments={task.attachments} />
+            </span>
+          </div>
+        ) : null}
+        <RoutingDecisionPanel
+          taskId={task.id}
+          stepId={stepId}
+          {...(stepRun ? { run: stepRun } : {})}
+        />
+      </div>
+
+      {interactiveStep ? (
+        <TerminalPane
+          {...(interactiveSessionId ? { sessionId: interactiveSessionId } : {})}
+          active={isActive && isRunning}
+        />
+      ) : (
+        <StepChat task={task} stepId={stepId} draft={draft} onDraftChange={setDraft} />
+      )}
+    </div>
+  );
+}

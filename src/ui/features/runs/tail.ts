@@ -1,0 +1,1 @@
+export { bindTails } from "./tail/index.ts";

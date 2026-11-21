@@ -1,0 +1,261 @@
+/* ---------- design tokens ---------- */
+
+:root {
+  /* spacing */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+  --s-8: 48px;
+  --s-10: 64px;
+
+  /* radius */
+  --r-sm: 4px;
+  --r-md: 6px;
+  --r-lg: 8px;
+  --r-xl: 12px;
+  --r-pill: 999px;
+
+  /* type */
+  --font-ui: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --t-xs: 11px;
+  --t-sm: 12px;
+  --t-md: 13px;
+  --t-base: 14px;
+  --t-lg: 16px;
+  --t-xl: 20px;
+  --t-2xl: 28px;
+
+  /* weights */
+  --w-regular: 400;
+  --w-medium: 500;
+  --w-semi: 600;
+  --w-bold: 700;
+
+  /* motion */
+  --ease-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --d-fast: 120ms;
+  --d-base: 200ms;
+
+  /* focus */
+  --ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+
+  /* status colors (theme-independent) */
+  --status-running: #22d3ee;
+  --status-await-review: #f59e0b;
+  --status-await-operator: #a78bfa;
+  --status-completed: #22c55e;
+  --status-blocked: #f43f5e;
+  --status-paused: #fb923c;
+  --status-interrupted: #818cf8;
+  --status-neutral: #8b95a4;
+  --status-cancelled: #6b7280;
+}
+
+/* dark theme (default) */
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+  /* Graphite: cool graphite surfaces, one restrained teal accent. */
+  --bg: #0d0e11;
+  --bg-elev: #121317;
+  --surface: #16181d;
+  --surface-2: #1c1f26;
+  --surface-3: #232730;
+  --hairline: #262a32;
+  --hairline-strong: #363b46;
+  --ink: #dfe3ec;
+  --ink-strong: #f4f6fa;
+  --ink-muted: #99a1b0;
+  --ink-faint: #626a79;
+
+  --accent: #2dd4bf;
+  --accent-hover: #5ee3d2;
+  --accent-ink: #04211d;
+  --accent-glow: rgba(45, 212, 191, 0.24);
+  --accent-soft: rgba(45, 212, 191, 0.13);
+
+  /* graphite canvas / terminal texture (transposed from theme lab · dir A) */
+  --edge: #3a4049;
+  --grid-dot: rgba(255, 255, 255, 0.04);
+  --term-bg: #0a0b0e;
+
+  /* elevation: inset top-highlight + drop shadow so surfaces catch light (theme lab · dir A) */
+  --elev-1: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 1px 2px rgba(0, 0, 0, 0.45);
+  --elev-2: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 8px 22px -8px rgba(0, 0, 0, 0.65);
+
+  --shadow-overlay:
+    0 1px 1px rgba(0, 0, 0, 0.3),
+    0 4px 8px rgba(0, 0, 0, 0.3),
+    0 16px 32px rgba(0, 0, 0, 0.34);
+  --shadow-popover: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  /* Graphite light: pure-white surfaces, graphite ink, quiet hairlines.
+     Body ink (--ink / --ink-muted) clears WCAG AA on white; --ink-faint is
+     reserved for de-emphasized / larger text. */
+  --bg: #f6f7f9;
+  --bg-elev: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f0f2f5;
+  --surface-3: #e6e9ee;
+  --hairline: #e4e7ec;
+  --hairline-strong: #c7ccd4;
+  --ink: #1a1d24;
+  --ink-strong: #0a0c11;
+  --ink-muted: #545b66;
+  --ink-faint: #8a919d;
+
+  --accent: #0d9488;
+  --accent-hover: #0f766e;
+  --accent-ink: #ffffff;
+  --accent-glow: rgba(13, 148, 136, 0.22);
+  --accent-soft: rgba(13, 148, 136, 0.10);
+
+  /* graphite canvas / terminal texture (transposed from theme lab · dir A) */
+  --edge: #c0c6cf;
+  --grid-dot: rgba(20, 30, 45, 0.05);
+  --term-bg: #0d0e11;
+
+  /* elevation: soft drop shadow on white surfaces (theme lab · dir A, light) */
+  --elev-1: 0 1px 2px rgba(10, 15, 20, 0.06);
+  --elev-2: 0 8px 22px -8px rgba(10, 15, 20, 0.16);
+
+  --shadow-overlay:
+    0 1px 1px rgba(15, 18, 23, 0.1),
+    0 4px 8px rgba(15, 18, 23, 0.12),
+    0 16px 32px rgba(15, 18, 23, 0.16);
+  --shadow-popover: 0 4px 16px rgba(15, 18, 23, 0.14);
+}
+
+/* ---------- reset + base ---------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: var(--t-base);
+  font-optical-sizing: auto;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100svh;
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--ink-strong);
+}
+
+/* scrollbars (webkit) */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--hairline-strong);
+  border-radius: var(--r-pill);
+  border: 2px solid var(--bg);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ink-faint);
+}
+
+/* utility classes */
+
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.muted {
+  color: var(--ink-muted);
+}
+
+.faint {
+  color: var(--ink-faint);
+}
+
+.icon {
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,0 +1,426 @@
+import { $, escapeHtml } from "@ui/shell/dom.js";
+import { icon } from "@ui/shell/icons.js";
+import { ui, type ViewName } from "@ui/app/state.js";
+import { navigate } from "@ui/app/router.js";
+import { countTaskBuckets, type TaskFilter } from "@ui/features/tasks/filters.js";
+import { taskIsComplete, uiLegacyStatus } from "@ui/app/task-status.js";
+import type { HarnessTask } from "@ui/app/types.js";
+import { updatePillHtml, bindUpdatePill } from "@ui/shell/update-pill.js";
+import { confirmAndShutdown } from "@ui/features/system/shutdown.js";
+
+let eventsConnected = true;
+const PROJECT_COLLAPSE_KEY = "harness:rail:collapsed-projects";
+const PROJECT_EXPAND_KEY = "harness:rail:expanded-projects";
+const RAIL_TICKET_LIMIT = 4;
+
+export function updateConnectionStatus(connected: boolean): void {
+  eventsConnected = connected;
+  const indicator = $("#connectionStatus");
+  if (indicator) indicator.classList.toggle("is-visible", !connected);
+}
+
+/** Patch status pill counts in-place without rebuilding chrome DOM. */
+export function updateChromeCounts(): void {
+  const data = ui.data;
+  if (!data) return;
+
+  const buckets = countTaskBuckets(data.tasks);
+  const { running, awaiting, blocked, resumable } = buckets;
+
+  const pills: Record<string, number> = {
+    running,
+    awaiting,
+    blocked,
+    resumable
+  };
+
+  $("#appBar")?.querySelectorAll<HTMLButtonElement>(".status-pill").forEach((pill) => {
+    const filter = pill.dataset["filter"];
+    if (!filter || !(filter in pills)) return;
+    const count = pills[filter]!;
+    const countEl = pill.querySelector(".status-pill-count");
+    if (countEl) countEl.textContent = String(count);
+    pill.hidden = filter === "blocked" || filter === "resumable" ? count === 0 : false;
+  });
+
+  updateRailCounts(data);
+}
+
+function railTip(label: string, count?: number | null): string {
+  return count !== undefined && count !== null ? `${label} (${count})` : label;
+}
+
+function updateRailCounts(data: NonNullable<typeof ui.data>): void {
+  const counts = countTaskBuckets(data.tasks);
+
+  $("#appRail")?.querySelectorAll<HTMLElement>(".rail-link").forEach((link) => {
+    const filter = link.dataset["filter"];
+    if (!filter || !(filter in counts)) return;
+    const count = counts[filter as keyof typeof counts];
+    const badge = link.querySelector(".count");
+    if (badge) badge.textContent = String(count);
+    const label = link.querySelector(".label")?.textContent?.trim();
+    if (label) {
+      const tip = railTip(label, count);
+      link.dataset["tip"] = tip;
+      link.setAttribute("aria-label", tip);
+    }
+  });
+}
+
+export function renderAppBar(): void {
+  const bar = $("#appBar");
+  if (!bar) return;
+  const data = ui.data;
+  const buckets = countTaskBuckets(data?.tasks ?? []);
+  const { running, awaiting, blocked, resumable } = buckets;
+
+  bar.innerHTML = `
+    <button class="brand brand-btn" id="brandHome" type="button" title="Mission Control — Home">
+      <span class="brand-wordmark">Mission Control</span>
+    </button>
+    ${updatePillHtml()}
+    <div class="app-bar-spacer"></div>
+    <button class="palette-trigger" id="paletteTrigger" title="Open command palette">
+      ${icon("search", 14)}
+      <span>Search…</span>
+      <kbd>⌘K</kbd>
+    </button>
+    <div class="status-pills">
+      <button class="status-pill" data-tone="running" data-filter="running" title="Running tasks">
+        <span class="dot"></span>
+        <span class="status-pill-count">${running}</span>
+        <span class="status-pill-label">running</span>
+      </button>
+      <button class="status-pill" data-tone="awaiting" data-filter="awaiting" title="Awaiting reply / review">
+        <span class="dot"></span>
+        <span class="status-pill-count">${awaiting}</span>
+        <span class="status-pill-label">await</span>
+      </button>
+      ${
+        blocked > 0
+          ? `<button class="status-pill" data-tone="blocked" data-filter="blocked" title="Blocked tasks"><span class="dot"></span><span class="status-pill-count">${blocked}</span><span class="status-pill-label">blocked</span></button>`
+          : ""
+      }
+      ${
+        resumable > 0
+          ? `<button class="status-pill" data-tone="resumable" data-filter="resumable" title="Paused / interrupted tasks"><span class="dot"></span><span class="status-pill-count">${resumable}</span><span class="status-pill-label">resumable</span></button>`
+          : ""
+      }
+    </div>
+    <span class="connection-status${eventsConnected ? "" : " is-visible"}" id="connectionStatus">
+      ${icon("refresh", 12)}
+      Reconnecting…
+    </span>
+    <button class="app-bar-power" id="powerButton" type="button" title="Shut down Mission Control" aria-label="Shut down Mission Control">
+      ${icon("power", 16)}
+    </button>
+  `;
+
+  $("#brandHome")?.addEventListener("click", () => navigate("home"));
+  $("#paletteTrigger")?.addEventListener("click", () => {
+    document.dispatchEvent(new CustomEvent("harness:open-palette"));
+  });
+  bar.querySelectorAll<HTMLButtonElement>(".status-pill").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const filter = btn.dataset["filter"];
+      if (filter) {
+        navigate("home", null, { filter: filter as TaskFilter });
+      } else {
+        navigate("home");
+      }
+    });
+  });
+
+  bindUpdatePill();
+
+  $("#powerButton")?.addEventListener("click", (event) => {
+    void confirmAndShutdown(event.currentTarget as HTMLButtonElement);
+  });
+}
+
+interface RailItem {
+  view: ViewName;
+  label: string;
+  iconName: string;
+  count?: number;
+  tone?: "warn" | "active";
+  filter?: string;
+}
+
+export function renderRail(): void {
+  const rail = $("#appRail");
+  if (!rail) return;
+
+  const taskItems: RailItem[] = [{ view: "home", label: "Home", iconName: "home" }];
+
+  const settingsItem: RailItem = { view: "settings", label: "Settings", iconName: "settings" };
+
+  rail.innerHTML = `
+    <div class="rail-section">
+      ${taskItems.map(railItemHtml).join("")}
+    </div>
+    ${projectRailHtml()}
+    <div class="rail-spacer"></div>
+    <div class="rail-section rail-section-footer">
+      ${railItemHtml(settingsItem)}
+    </div>
+  `;
+
+  rail.querySelectorAll<HTMLElement>(".rail-link").forEach((link) => {
+    link.addEventListener("click", () => {
+      const view = link.dataset["view"] as ViewName;
+      const filter = link.dataset["filter"] as TaskFilter | undefined;
+      if (view === "tasks" && filter) {
+        navigate("tasks", null, { filter });
+        return;
+      }
+      const projectId = link.dataset["projectId"];
+      navigate(view, projectId ?? null);
+    });
+  });
+
+  rail.querySelector<HTMLElement>("[data-new-project]")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    document.dispatchEvent(new CustomEvent("harness:new-project"));
+  });
+
+  rail.querySelector<HTMLElement>("[data-collapse-all-projects]")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    toggleAllProjectsCollapse();
+  });
+
+  rail.querySelectorAll<HTMLElement>("[data-collapse-project-id]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const projectId = button.dataset["collapseProjectId"];
+      if (projectId) toggleProjectCollapse(projectId);
+    });
+  });
+
+  rail.querySelectorAll<HTMLElement>("[data-expand-project-id]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const projectId = button.dataset["expandProjectId"];
+      if (projectId) toggleProjectExpand(projectId);
+    });
+  });
+
+  rail.querySelectorAll<HTMLElement>(".rail-project-ticket").forEach((button) => {
+    button.addEventListener("click", () => {
+      const taskId = button.dataset["taskId"];
+      if (taskId) {
+        navigate("task", taskId);
+        return;
+      }
+      const projectId = button.dataset["projectId"];
+      if (projectId) navigate("project", projectId);
+    });
+  });
+
+  const targetView: string = ui.view === "task" ? "home" : ui.view;
+
+  rail.querySelectorAll<HTMLElement>(".rail-link").forEach((link) => {
+    const view = link.dataset["view"];
+    if (view !== targetView) return;
+
+    if (targetView === "project") {
+      if (link.dataset["projectId"] === ui.taskId) {
+        link.classList.add("active");
+      }
+      return;
+    }
+
+    if (!link.dataset["filter"]) {
+      link.classList.add("active");
+    }
+  });
+}
+
+function projectRailHtml(): string {
+  const projects = ui.data?.projects ?? [];
+  const tasks = ui.data?.tasks ?? [];
+  const collapsed = readCollapsedProjects();
+  const expanded = readExpandedProjects();
+  const allCollapsed = projects.length > 0 && projects.every((project) => collapsed.has(project.id));
+  const rows = projects.map((project) => {
+    const scoped = tasks.filter((task) => task.projectId === project.id);
+    const open = scoped
+      .filter((task) => !taskIsComplete(task))
+      .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+    const isCollapsed = collapsed.has(project.id);
+    const isExpanded = expanded.has(project.id);
+    const visible = isExpanded ? open : open.slice(0, RAIL_TICKET_LIMIT);
+    const overflow = Math.max(open.length - visible.length, 0);
+    return `
+      <div class="rail-project${isCollapsed ? " collapsed" : ""}">
+        <div class="rail-project-head">
+          <button class="rail-project-toggle" data-collapse-project-id="${escapeHtml(project.id)}" type="button" title="${isCollapsed ? "Expand project" : "Collapse project"}">
+            ${icon(isCollapsed ? "chevron-right" : "chevron-down", 14)}
+          </button>
+          <button class="rail-link rail-project-link" data-view="project" data-project-id="${escapeHtml(project.id)}" type="button" data-tip="${escapeHtml(railTip(project.name, open.length || null))}" aria-label="${escapeHtml(railTip(project.name, open.length || null))}">
+            ${icon("folder", 16)}
+            <span class="label">${escapeHtml(project.name)}</span>
+            ${open.length ? `<span class="count">${open.length}</span>` : ""}
+          </button>
+        </div>
+        ${projectStatusHtml(scoped)}
+        <div class="rail-project-tickets">
+          ${
+            visible.length
+              ? visible.map(projectTicketHtml).join("")
+              : `<span class="rail-project-empty">No open tickets</span>`
+          }
+          ${railExpandToggleHtml(project.id, overflow, isExpanded, open.length)}
+        </div>
+      </div>
+    `;
+  });
+  const collapseAllLabel = allCollapsed ? "Expand all" : "Collapse all";
+  const collapseAllIcon = allCollapsed ? "chevron-down" : "chevron-up";
+  return `
+    <div class="rail-heading rail-heading-row">
+      <span>Projects</span>
+      <div class="rail-heading-actions">
+        ${
+          projects.length
+            ? `<button class="rail-heading-action" data-collapse-all-projects type="button" title="${collapseAllLabel}" aria-label="${collapseAllLabel}">
+          ${icon(collapseAllIcon, 14)}
+        </button>`
+            : ""
+        }
+        <button class="rail-heading-action" data-new-project type="button" title="Add project" aria-label="Add project">
+          ${icon("plus", 14)}
+        </button>
+      </div>
+    </div>
+    <div class="rail-section rail-projects">
+      ${
+        rows.length
+          ? rows.join("")
+          : `<span class="rail-project-empty rail-projects-empty">No projects yet. Select a folder with +.</span>`
+      }
+    </div>
+  `;
+}
+
+function railExpandToggleHtml(
+  projectId: string,
+  overflow: number,
+  isExpanded: boolean,
+  openCount: number
+): string {
+  if (!isExpanded && overflow > 0) {
+    return `<button class="rail-project-ticket rail-project-more" data-expand-project-id="${escapeHtml(projectId)}" type="button">+${overflow} more</button>`;
+  }
+  if (isExpanded && openCount > RAIL_TICKET_LIMIT) {
+    return `<button class="rail-project-ticket rail-project-more" data-expand-project-id="${escapeHtml(projectId)}" type="button">Show less</button>`;
+  }
+  return "";
+}
+
+function projectStatusHtml(tasks: HarnessTask[]): string {
+  const counts = countTaskBuckets(tasks);
+  const entries = [
+    { key: "running", label: "active", count: counts.running, tone: "active" },
+    { key: "awaiting", label: "awaiting", count: counts.awaiting, tone: "warn" },
+    { key: "queue", label: "queued", count: counts.queue, tone: "neutral" },
+    { key: "blocked", label: "blocked", count: counts.blocked, tone: "blocked" }
+  ].filter((entry) => entry.count > 0);
+
+  if (!entries.length) return "";
+  return `
+    <div class="rail-project-status">
+      ${entries.map((entry) => `<span data-tone="${entry.tone}" title="${entry.key}">${entry.label} ${entry.count}</span>`).join("")}
+    </div>
+  `;
+}
+
+function projectTicketHtml(task: HarnessTask): string {
+  const status = uiLegacyStatus(task);
+  return `
+    <button class="rail-project-ticket" data-view="task" data-task-id="${escapeHtml(task.id)}" type="button" title="${escapeHtml(task.title)}">
+      <span class="rail-project-ticket-status" data-status="${escapeHtml(status)}"></span>
+      <span class="rail-project-ticket-title">${escapeHtml(task.title)}</span>
+    </button>
+  `;
+}
+
+function readCollapsedProjects(): Set<string> {
+  try {
+    const raw = localStorage.getItem(PROJECT_COLLAPSE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === "string") : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function writeCollapsedProjects(collapsed: Set<string>): void {
+  localStorage.setItem(PROJECT_COLLAPSE_KEY, JSON.stringify([...collapsed]));
+}
+
+function toggleProjectCollapse(projectId: string): void {
+  const collapsed = readCollapsedProjects();
+  if (collapsed.has(projectId)) {
+    collapsed.delete(projectId);
+  } else {
+    collapsed.add(projectId);
+  }
+  writeCollapsedProjects(collapsed);
+  renderRail();
+}
+
+function toggleAllProjectsCollapse(): void {
+  const projects = ui.data?.projects ?? [];
+  if (!projects.length) return;
+  const collapsed = readCollapsedProjects();
+  const allCollapsed = projects.every((project) => collapsed.has(project.id));
+  if (allCollapsed) {
+    writeCollapsedProjects(new Set());
+  } else {
+    writeCollapsedProjects(new Set(projects.map((project) => project.id)));
+    writeExpandedProjects(new Set());
+  }
+  renderRail();
+}
+
+function readExpandedProjects(): Set<string> {
+  try {
+    const raw = localStorage.getItem(PROJECT_EXPAND_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === "string") : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function writeExpandedProjects(expanded: Set<string>): void {
+  localStorage.setItem(PROJECT_EXPAND_KEY, JSON.stringify([...expanded]));
+}
+
+function toggleProjectExpand(projectId: string): void {
+  const expanded = readExpandedProjects();
+  if (expanded.has(projectId)) {
+    expanded.delete(projectId);
+  } else {
+    expanded.add(projectId);
+  }
+  writeExpandedProjects(expanded);
+  renderRail();
+}
+
+function railItemHtml(item: RailItem): string {
+  const tip = railTip(item.label, item.count);
+  const count =
+    item.count !== undefined && item.count !== null
+      ? `<span class="count" ${item.tone ? `data-tone="${item.tone}"` : ""}>${item.count}</span>`
+      : "";
+  return `
+    <button class="rail-link" data-view="${item.view}"${item.filter ? ` data-filter="${item.filter}"` : ""} type="button" data-tip="${escapeHtml(tip)}" aria-label="${escapeHtml(tip)}">
+      ${icon(item.iconName, 14)}
+      <span class="label">${item.label}</span>
+      ${count}
+    </button>
+  `;
+}
