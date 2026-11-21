@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { deriveLegacyStatus } from "../../core/tasks/status.ts";
 import { listAllRuns } from "../../core/tasks/runs.ts";
+import { parseRunId } from "../../core/tasks/run-id.ts";
 import { getTask, listTasks } from "../../core/tasks/tasks.ts";
 import { EntityNotFoundError } from "../../core/tasks/errors.ts";
 import { DEFAULT_WORKFLOW_ID, loadWorkflow } from "../../core/workflows/index.ts";
@@ -55,7 +56,7 @@ export const taskTools: McpToolModule = {
       );
     },
     read_run: async (ctx, args) => {
-      const id = String(args["runId"]);
+      const id = parseRunId(args["runId"]);
       const file = typeof args["file"] === "string" ? args["file"] : "summary.md";
       if (!/^(prompt\.md|log\.txt|summary\.md)$/.test(file)) {
         throw new Error("file must be one of prompt.md, log.txt, summary.md");

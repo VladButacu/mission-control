@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -8,12 +9,13 @@ import { createServer } from "../src/server/app.ts";
 import { ensureHarnessRepository } from "../src/core/bootstrap/repository.ts";
 
 describe("server route path containment", () => {
+  const runId = randomUUID();
   let root: string;
 
   beforeEach(async () => {
     root = await mkdtemp(path.join(tmpdir(), "harness-server-containment-"));
     await ensureHarnessRepository(root);
-    await mkdir(path.join(root, "data", "runs", "run-1"), { recursive: true });
+    await mkdir(path.join(root, "data", "runs", runId), { recursive: true });
   });
 
   afterEach(async () => {
@@ -21,10 +23,10 @@ describe("server route path containment", () => {
   });
 
   it("serves a run's own log", async () => {
-    await writeFile(path.join(root, "data", "runs", "run-1", "log.txt"), "hello", "utf8");
+    await writeFile(path.join(root, "data", "runs", runId, "log.txt"), "hello", "utf8");
     const app = createServer({ root, testMode: true });
 
-    const tail = await request(app).get("/api/runs/run-1/tail?since=0").expect(200);
+    const tail = await request(app).get(`/api/runs/${runId}/tail?since=0`).expect(200);
     expect(tail.body.chunk).toBe("hello");
   });
 
@@ -38,11 +40,11 @@ describe("server route path containment", () => {
   });
 
   it("does not send an artifact file outside the runs directory", async () => {
-    // From data/runs/run-1, "../../../secret.txt" resolves to <root>/secret.txt.
+    // From data/runs/<runId>, "../../../secret.txt" resolves to <root>/secret.txt.
     await writeFile(path.join(root, "secret.txt"), "leaked-artifact", "utf8");
     const app = createServer({ root, testMode: true });
 
-    const res = await request(app).get("/api/runs/run-1/artifacts/..%2F..%2F..%2Fsecret.txt").expect(400);
+    const res = await request(app).get(`/api/runs/${runId}/artifacts/..%2F..%2F..%2Fsecret.txt`).expect(400);
     expect(res.text).not.toContain("leaked-artifact");
   });
 
