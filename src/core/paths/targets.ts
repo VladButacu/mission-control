@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { readJsonFile } from "../infra/fs.ts";
 import type { HarnessTarget, HarnessTask } from "../types.ts";
+import { containedPath } from "./contained.ts";
 import {
   MAX_COMPLETIONS,
   fuzzyFindTargets,
@@ -20,8 +21,19 @@ export interface TargetOptions {
 }
 
 const AT_PATH_PATTERN = /@(?:~\/[^\s,;)"']+|\/[^\s,;)"']+|[A-Za-z0-9._-][^\s,;)"']*)/g;
-/** Backtick-quoted absolute paths common in intake tickets, e.g. `(/Users/foo/bar)`. */
-const BACKTICK_ABSOLUTE_PATH_PATTERN = /`(\/(?:[^`\\]|\\.)*)`/g;
+/**
+ * Backtick-quoted absolute paths common in intake tickets, e.g. `(/Users/foo/bar)`.
+ * shortcut: no backslash escapes inside the path. With escapes the scan can restart at every backtick and go quadratic, upgrade to a linear parser if paths with backticks or backslashes must match.
+ */
+const BACKTICK_ABSOLUTE_PATH_PATTERN = /`(\/[^`\\]*)`/g;
+const TRAILING_PUNCTUATION = new Set([".", ",", ";", ":", "!", "?"]);
+
+/** Linear trim; a `/[.,;:!?]+$/` replace is quadratic on long punctuation runs. */
+function stripTrailingPunctuation(value: string): string {
+  let end = value.length;
+  while (end > 0 && TRAILING_PUNCTUATION.has(value.charAt(end - 1))) end -= 1;
+  return value.slice(0, end);
+}
 
 export function homeRootForHarness(root: string): string | undefined {
   const parts = path.resolve(root).split(path.sep);
@@ -50,11 +62,10 @@ function allowedHome(options: TargetOptions): string {
 
 function normalizeTarget(raw: string, options: TargetOptions): string {
   const home = allowedHome(options);
-  const trimmed = raw.replace(/[.,;:!?]+$/g, "");
+  const trimmed = stripTrailingPunctuation(raw);
   const withoutPrefix = trimmed.startsWith("@") ? trimmed.slice(1) : trimmed;
-  const expanded = expandTargetPath(withoutPrefix, home);
-  const resolved = path.resolve(expanded);
-  if (resolved !== home && !resolved.startsWith(`${home}${path.sep}`)) {
+  const resolved = containedPath(home, expandTargetPath(withoutPrefix, home));
+  if (!resolved) {
     throw new Error(`Target path is outside ${home}: ${raw}`);
   }
   return resolved;
@@ -88,7 +99,7 @@ export async function extractTargets(text: string, options: TargetOptions = {}):
     }
 
     seen.add(resolved);
-    const displayRaw = raw.startsWith("@") ? raw.replace(/[.,;:!?]+$/g, "") : raw;
+    const displayRaw = raw.startsWith("@") ? stripTrailingPunctuation(raw) : raw;
     targets.push({
       raw: displayRaw,
       path: resolved,
@@ -116,15 +127,14 @@ export async function completeTargets(prefix: string, options: TargetOptions = {
   }
   const home = allowedHome(options);
   const raw = prefix.slice(1);
-  const expanded = expandTargetPath(raw, home);
-  const resolved = path.resolve(expanded || home);
-  if (resolved !== home && !resolved.startsWith(`${home}${path.sep}`)) {
+  const resolved = containedPath(home, expandTargetPath(raw, home));
+  if (!resolved) {
     return [];
   }
 
-  const parent = !raw || raw.endsWith("/") ? resolved : path.dirname(resolved);
+  const parent = containedPath(home, !raw || raw.endsWith("/") ? resolved : path.dirname(resolved));
   const partial = !raw || raw.endsWith("/") ? "" : path.basename(resolved).toLowerCase();
-  if (parent !== home && !parent.startsWith(`${home}${path.sep}`)) {
+  if (!parent) {
     return [];
   }
 
@@ -191,14 +201,9 @@ function expandTargetPath(raw: string, home: string): string {
 }
 
 function resolveTargetPath(raw: string, home: string): string | undefined {
-  const trimmed = raw.replace(/[.,;:!?]+$/g, "");
+  const trimmed = stripTrailingPunctuation(raw);
   const withoutPrefix = trimmed.startsWith("@") ? trimmed.slice(1) : trimmed;
-  const expanded = expandTargetPath(withoutPrefix, home);
-  const resolved = path.resolve(expanded);
-  if (resolved !== home && !resolved.startsWith(`${home}${path.sep}`)) {
-    return undefined;
-  }
-  return resolved;
+  return containedPath(home, expandTargetPath(withoutPrefix, home));
 }
 
 function recordHistoricalPath(
@@ -207,8 +212,8 @@ function recordHistoricalPath(
   home: string,
   timestamp: number
 ): void {
-  const resolved = path.resolve(targetPath);
-  if (resolved !== home && !resolved.startsWith(`${home}${path.sep}`)) {
+  const resolved = containedPath(home, targetPath);
+  if (!resolved) {
     return;
   }
   paths.set(resolved, Math.max(paths.get(resolved) ?? 0, timestamp));

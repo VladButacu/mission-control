@@ -3,6 +3,7 @@ import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 
 import { walkDirDetailed } from "../infra/walk-dir.ts";
+import { containedPath } from "./contained.ts";
 
 export interface TargetCompletion {
   label: string;
@@ -75,19 +76,24 @@ export async function toTargetCompletion(
   fullPath: string,
   home: string
 ): Promise<TargetCompletion | undefined> {
+  const safePath = containedPath(home, fullPath);
+  if (!safePath) {
+    return undefined;
+  }
+
   let info: Awaited<ReturnType<typeof stat>>;
   try {
-    info = await stat(fullPath);
+    info = await stat(safePath);
   } catch {
     return undefined;
   }
 
   const kind = info.isDirectory() ? "directory" : "file";
   return {
-    label: completionLabel(fullPath, home, kind),
-    path: fullPath,
+    label: completionLabel(safePath, home, kind),
+    path: safePath,
     kind,
-    insertText: `@${fullPath}`
+    insertText: `@${safePath}`
   };
 }
 
