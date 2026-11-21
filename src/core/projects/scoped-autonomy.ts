@@ -111,7 +111,7 @@ const HARNESS_GUIDANCE_SWEEP_DEFAULT_STATUS: AutonomyJobStatus = "paused";
  * source (package name match). Only then does it own the guidance sweep.
  */
 export async function isHarnessProject(project: ProjectRecord): Promise<boolean> {
-  const raw = await readTextFile(path.join(project.repoPath, "package.json"));
+  const raw = await readTextFile(project.repoPath, path.join(project.repoPath, "package.json"));
   if (!raw) return false;
   try {
     const pkg = JSON.parse(raw) as { name?: unknown };
@@ -146,7 +146,7 @@ export async function listProjectJobs(root: string, projectId: string): Promise<
     throw new Error(`Project not found: ${projectId}`);
   }
   const filePath = projectJobsPath(root, projectId);
-  const stored = await readJsonFile<AutonomyJob[]>(filePath, []);
+  const stored = await readJsonFile<AutonomyJob[]>(root, filePath, []);
   const defaults = await applicableProjectJobDefaults(project);
 
   // Stored jobs (defaults previously seeded + any custom jobs an operator/agent
@@ -162,7 +162,7 @@ export async function listProjectJobs(root: string, projectId: string): Promise<
   }
   const merged = [...byId.values()];
   if (changed) {
-    await writeJsonFile(filePath, merged);
+    await writeJsonFile(root, filePath, merged);
   }
   return merged;
 }
@@ -182,7 +182,7 @@ export async function setProjectJobRunMode(
     throw new Error(`Job not found: ${jobName}`);
   }
   jobs[index] = { ...jobs[index]!, runMode };
-  await writeJsonFile(projectJobsPath(root, projectId), jobs);
+  await writeJsonFile(root, projectJobsPath(root, projectId), jobs);
   return jobs[index]!;
 }
 
@@ -257,12 +257,12 @@ export async function runProjectJob(
           }
         : j
     );
-    await writeJsonFile(projectJobsPath(root, projectId), nextJobs);
+    await writeJsonFile(root, projectJobsPath(root, projectId), nextJobs);
 
     // Append to harness-wide run history
-    const history = await readJsonFile<AutonomyRunResult[]>(autonomyRunsPath(root), []);
+    const history = await readJsonFile<AutonomyRunResult[]>(root, autonomyRunsPath(root), []);
     history.unshift({ ...result, jobId: compositeId });
-    await writeJsonFile(autonomyRunsPath(root), history.slice(0, 200));
+    await writeJsonFile(root, autonomyRunsPath(root), history.slice(0, 200));
 
     return result;
   } finally {
@@ -297,7 +297,7 @@ export async function defineProjectJob(
   }
 
   const filePath = projectJobsPath(root, projectId);
-  const stored = await readJsonFile<AutonomyJob[]>(filePath, []);
+  const stored = await readJsonFile<AutonomyJob[]>(root, filePath, []);
   const existing = stored.find((j) => j.id === definition.id);
   const materialized: AutonomyJob = withDefaults({
     id: definition.id,
@@ -315,7 +315,7 @@ export async function defineProjectJob(
   const index = stored.findIndex((j) => j.id === definition.id);
   if (index >= 0) stored[index] = materialized;
   else stored.push(materialized);
-  await writeJsonFile(filePath, stored);
+  await writeJsonFile(root, filePath, stored);
   return { ok: true, job: materialized };
 }
 

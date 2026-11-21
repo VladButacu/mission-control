@@ -85,7 +85,7 @@ describe("harness self-improvement", () => {
       }
     };
 
-    await writeJsonFile(path.join(root, "data", "state", "self-improvement.json"), {
+    await writeJsonFile(root, path.join(root, "data", "state", "self-improvement.json"), {
       runningSince: new Date().toISOString()
     });
 
@@ -139,7 +139,7 @@ describe("harness self-improvement", () => {
     runner.setReplies(["Stale guard cleared."]);
 
     const staleSince = new Date(Date.now() - SELF_IMPROVEMENT_STALE_LOCK_MS - 60_000).toISOString();
-    await writeJsonFile(path.join(root, "data", "state", "self-improvement.json"), {
+    await writeJsonFile(root, path.join(root, "data", "state", "self-improvement.json"), {
       runningSince: staleSince
     });
 
@@ -191,7 +191,7 @@ describe("harness self-improvement", () => {
   });
 
   it("enriches snapshot from runs and autonomy state when tasks.json is empty", async () => {
-    await writeJsonFile(path.join(root, "data", "state", "tasks.json"), []);
+    await writeJsonFile(root, path.join(root, "data", "state", "tasks.json"), []);
 
     const runIds: string[] = [];
     for (let index = 0; index < 3; index++) {
@@ -207,7 +207,7 @@ describe("harness self-improvement", () => {
       runIds.push(run.id);
     }
 
-    await writeJsonFile(path.join(root, "data", "state", "autonomy-runs.json"), [
+    await writeJsonFile(root, path.join(root, "data", "state", "autonomy-runs.json"), [
       {
         jobId: "worktree-cleanup-sweep",
         status: "completed",
@@ -228,7 +228,7 @@ describe("harness self-improvement", () => {
       }
     ]);
 
-    await writeJsonFile(path.join(root, "data", "state", "autonomy-jobs.json"), [
+    await writeJsonFile(root, path.join(root, "data", "state", "autonomy-jobs.json"), [
       {
         id: "worktree-cleanup-sweep",
         title: "Worktree cleanup sweep",
@@ -283,7 +283,7 @@ describe("harness self-improvement", () => {
     const runner = new DeterministicAgentRunner("grok");
     runner.setReplies(["Should not run."]);
 
-    await writeJsonFile(path.join(root, "data", "state", "self-improvement.json"), {
+    await writeJsonFile(root, path.join(root, "data", "state", "self-improvement.json"), {
       runningSince: new Date().toISOString()
     });
 

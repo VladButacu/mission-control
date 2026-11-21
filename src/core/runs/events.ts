@@ -106,7 +106,7 @@ export async function appendRunEvent(root: string, runId: string, input: RunEven
   const seq = await nextSeq(root, runId);
   const { at, ...rest } = input;
   const event: RunEvent = { ...rest, seq, at: at ?? new Date().toISOString() };
-  await ensureDir(path.dirname(runEventsPath(root, runId)));
+  await ensureDir(root, path.dirname(runEventsPath(root, runId)));
   await appendFile(runEventsPath(root, runId), `${JSON.stringify(event)}\n`, "utf8");
   emitter.emit(runId, event);
   return event;

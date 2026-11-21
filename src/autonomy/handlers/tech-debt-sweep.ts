@@ -14,7 +14,7 @@ interface TechDebtItem {
 }
 
 export async function runTechDebtSweep(root: string): Promise<AutonomyRunResult> {
-  const items = await readJsonFile<TechDebtItem[]>(techDebtPath(root), []);
+  const items = await readJsonFile<TechDebtItem[]>(root, techDebtPath(root), []);
   const open = items.find((item) => (item.status ?? "open") === "open");
   if (!open) {
     return { jobId: "tech-debt-sweep", status: "completed", summary: "No open tech-debt items.", proposalsCreated: 0 };
@@ -35,6 +35,6 @@ export async function runTechDebtSweep(root: string): Promise<AutonomyRunResult>
   const next = items.map((item) =>
     item.id === open.id ? { ...item, status: "queued" as const, queuedTaskId: created.id } : item
   );
-  await writeJsonFile(techDebtPath(root), next);
+  await writeJsonFile(root, techDebtPath(root), next);
   return { jobId: "tech-debt-sweep", status: "completed", summary: `Queued synthetic task for ${open.id}.`, proposalsCreated: 0, syntheticTaskId: created.id };
 }

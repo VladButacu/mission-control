@@ -24,7 +24,7 @@ export async function runProjectTechDebtSweep(
   if (!project) throw new Error("Missing project context.");
 
   const debtPath = path.join(projectDir(root, project.id), "tech-debt.json");
-  const items = await readJsonFile<TechDebtItem[]>(debtPath, []);
+  const items = await readJsonFile<TechDebtItem[]>(root, debtPath, []);
   const open = items.find((item) => (item.status ?? "open") === "open");
   if (!open) {
     return {
@@ -60,7 +60,7 @@ export async function runProjectTechDebtSweep(
   const next = items.map((item) =>
     item.id === open.id ? { ...item, status: "queued" as const, queuedTaskId: created.id } : item
   );
-  await writeJsonFile(debtPath, next);
+  await writeJsonFile(root, debtPath, next);
 
   return {
     jobId: "tech-debt-sweep",

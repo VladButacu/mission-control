@@ -153,7 +153,7 @@ export async function captureMemoryPage(root: string, projectId: string, input: 
 export async function listMemoryPages(root: string, projectId: string): Promise<MemoryPageSummary[]> {
   await ensureHarnessRepository(root);
   const pagesDir = pagesRoot(root, projectId);
-  await ensureDir(pagesDir);
+  await ensureDir(root, pagesDir);
   const files = await walkMarkdown(pagesDir);
   const pages = await Promise.all(files.map((file) => readMemoryFile(root, projectId, file)));
   return pages

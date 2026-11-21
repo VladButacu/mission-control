@@ -227,7 +227,7 @@ async function loadHistoricalTargetPaths(
     return new Map();
   }
 
-  const tasks = await readJsonFile<HarnessTask[]>(path.join(harnessRoot, "data", "state", "tasks.json"), []);
+  const tasks = await readJsonFile<HarnessTask[]>(harnessRoot, path.join(harnessRoot, "data", "state", "tasks.json"), []);
   const paths = new Map<string, number>();
 
   for (const task of tasks) {

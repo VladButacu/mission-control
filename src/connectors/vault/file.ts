@@ -24,9 +24,11 @@ type TokenMap = Record<string, ConnectorTokenPayload>;
  * atomically and locked to mode 0o600.
  */
 export class FileConnectorVault implements ConnectorVault {
+  private readonly root: string;
   private readonly filePath: string;
 
   constructor(root: string) {
+    this.root = root;
     this.filePath = path.join(root, TOKENS_RELATIVE);
   }
 
@@ -49,13 +51,13 @@ export class FileConnectorVault implements ConnectorVault {
   }
 
   private async read(): Promise<TokenMap> {
-    return readJsonFile<TokenMap>(this.filePath, {});
+    return readJsonFile<TokenMap>(this.root, this.filePath, {});
   }
 
   private async write(mutate: (tokens: TokenMap) => void): Promise<void> {
     const tokens = await this.read();
     mutate(tokens);
-    await writeJsonFile(this.filePath, tokens);
+    await writeJsonFile(this.root, this.filePath, tokens);
     await this.restrict();
   }
 
@@ -67,7 +69,7 @@ export class FileConnectorVault implements ConnectorVault {
   private async restrict(): Promise<void> {
     try {
       const dir = path.dirname(this.filePath);
-      await ensureDir(dir);
+      await ensureDir(this.root, dir);
       await chmod(dir, DIR_MODE);
       await chmod(this.filePath, FILE_MODE);
     } catch {

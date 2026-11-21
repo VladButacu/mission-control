@@ -22,7 +22,7 @@ import type { HarnessTask } from "../src/core/types.ts";
 
 async function seedBundledWorkflows(targetRoot: string): Promise<void> {
   const runtimeDir = path.join(targetRoot, "workflows");
-  await ensureDir(runtimeDir);
+  await ensureDir(targetRoot, runtimeDir);
   for (const file of await readdir(bundledWorkflowsDir())) {
     if (!file.endsWith(".yml")) continue;
     await copyFile(path.join(bundledWorkflowsDir(), file), path.join(runtimeDir, file));

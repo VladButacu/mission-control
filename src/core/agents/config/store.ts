@@ -24,16 +24,16 @@ function configPath(root: string): string {
  */
 export async function loadAgentConfig(root: string): Promise<AgentConfigBundle> {
   await ensureHarnessRepository(root);
-  const stored = await readJsonFile<Partial<AgentConfigBundle> | null>(configPath(root), null);
+  const stored = await readJsonFile<Partial<AgentConfigBundle> | null>(root, configPath(root), null);
   if (!stored || !Array.isArray(stored.tools) || stored.tools.length === 0) {
     const seeded = normalizeBundle(builtinAgentConfigBundle());
-    await writeJsonFile(configPath(root), seeded);
+    await writeJsonFile(root, configPath(root), seeded);
     return seeded;
   }
   const bundle = normalizeBundle(stored);
   const merged = mergeBuiltins(bundle);
   if (merged !== bundle) {
-    await writeJsonFile(configPath(root), merged);
+    await writeJsonFile(root, configPath(root), merged);
   }
   return merged;
 }
@@ -99,7 +99,7 @@ async function mutate(
   await ensureHarnessRepository(root);
   // Ensure the file exists (seeds on first run) so updateJsonFile has a baseline.
   await loadAgentConfig(root);
-  return updateJsonFile<AgentConfigBundle>(
+  return updateJsonFile<AgentConfigBundle>(root, 
     configPath(root),
     builtinAgentConfigBundle(),
     (current) => normalizeBundle(mutator(normalizeBundle(current)))
@@ -109,7 +109,7 @@ async function mutate(
 export async function saveAgentConfig(root: string, bundle: AgentConfigBundle): Promise<AgentConfigBundle> {
   const normalized = normalizeBundle(bundle);
   await ensureHarnessRepository(root);
-  await writeJsonFile(configPath(root), normalized);
+  await writeJsonFile(root, configPath(root), normalized);
   return normalized;
 }
 

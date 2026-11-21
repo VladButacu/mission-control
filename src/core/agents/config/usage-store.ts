@@ -16,17 +16,17 @@ function sameTarget(a: UsageSnapshot, toolId: ToolId, modelPoolId?: ModelPoolId)
 
 export async function loadUsageSnapshots(root: string): Promise<UsageSnapshots> {
   await ensureHarnessRepository(root);
-  return readJsonFile<UsageSnapshots>(usagePath(root), emptyUsageSnapshots());
+  return readJsonFile<UsageSnapshots>(root, usagePath(root), emptyUsageSnapshots());
 }
 
 export async function saveUsageSnapshots(root: string, usage: UsageSnapshots): Promise<void> {
-  await writeJsonFile(usagePath(root), usage);
+  await writeJsonFile(root, usagePath(root), usage);
 }
 
 /** Insert or replace the snapshot for a tool (and optional model pool). */
 export async function upsertUsageSnapshot(root: string, snapshot: UsageSnapshot): Promise<UsageSnapshots> {
   await ensureHarnessRepository(root);
-  return updateJsonFile<UsageSnapshots>(usagePath(root), emptyUsageSnapshots(), (current) => {
+  return updateJsonFile<UsageSnapshots>(root, usagePath(root), emptyUsageSnapshots(), (current) => {
     const snapshots = current.snapshots.filter(
       (entry) => !sameTarget(entry, snapshot.toolId, snapshot.modelPoolId)
     );

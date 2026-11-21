@@ -68,11 +68,11 @@ function statePath(root: string, fileName: string): string {
 }
 
 async function readState(root: string, fileName: string): Promise<AutonomyAgentState> {
-  return readJsonFile<AutonomyAgentState>(statePath(root, fileName), {});
+  return readJsonFile<AutonomyAgentState>(root, statePath(root, fileName), {});
 }
 
 async function writeState(root: string, fileName: string, state: AutonomyAgentState): Promise<void> {
-  await writeJsonFile(statePath(root, fileName), state);
+  await writeJsonFile(root, statePath(root, fileName), state);
 }
 
 function findActiveRun(runs: Awaited<ReturnType<typeof listAllRuns>>, taskId: string) {
@@ -171,7 +171,7 @@ export async function runAutonomyAgentTurn(
     });
 
     const runDir = path.join(root, "data", "runs", run.id);
-    await ensureDir(runDir);
+    await ensureDir(root, runDir);
     const logPath = path.join(runDir, "log.txt");
     await writeFile(path.join(runDir, "prompt.md"), prompt, "utf8");
     await writeFile(logPath, "", "utf8");

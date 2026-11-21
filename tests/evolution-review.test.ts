@@ -155,7 +155,7 @@ describe("turn evolution review", () => {
     runner.setReplies(["Stale guard cleared."]);
 
     const staleSince = new Date(Date.now() - AUTONOMY_AGENT_STALE_LOCK_MS - 60_000).toISOString();
-    await writeJsonFile(path.join(root, "data", "state", "evolution-review.json"), {
+    await writeJsonFile(root, path.join(root, "data", "state", "evolution-review.json"), {
       runningSince: staleSince
     });
 

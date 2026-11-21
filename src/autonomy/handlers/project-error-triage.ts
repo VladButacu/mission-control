@@ -21,7 +21,7 @@ export async function runProjectErrorTriage(
   if (!project) throw new Error("Missing project context.");
 
   const reviewedPath = path.join(projectDir(root, project.id), "triage-reviewed.json");
-  const reviewed = await readJsonFile<TriageReviewedEntry[]>(reviewedPath, []);
+  const reviewed = await readJsonFile<TriageReviewedEntry[]>(root, reviewedPath, []);
   const reviewedIds = new Set(reviewed.map((e) => e.taskId));
 
   const allTasks = await listTasks(root);
@@ -80,7 +80,7 @@ End with a short summary of what you triaged and which debt items you captured. 
     buildPrompt: (_context: string) => prompt,
     afterTurn: async () => {
       const entries: TriageReviewedEntry[] = blockedTasks.map((t) => ({ taskId: t.id, reviewedAt: now() }));
-      await writeJsonFile(reviewedPath, [...reviewed, ...entries]);
+      await writeJsonFile(root, reviewedPath, [...reviewed, ...entries]);
     }
   };
 

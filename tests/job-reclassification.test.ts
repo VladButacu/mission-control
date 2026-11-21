@@ -61,7 +61,7 @@ describe("autonomy job reclassification", () => {
     });
 
     it("prunes stored global jobs that are no longer defaults", async () => {
-      await writeJsonFile(jobsPath(root), [
+      await writeJsonFile(root, jobsPath(root), [
         {
           id: "memory-index-refresh",
           title: "Memory index refresh",
@@ -96,7 +96,7 @@ describe("autonomy job reclassification", () => {
     });
 
     it("preserves operator-set status on a stored clickup-ticket-sync job", async () => {
-      await writeJsonFile(jobsPath(root), [
+      await writeJsonFile(root, jobsPath(root), [
         {
           id: "clickup-ticket-sync",
           title: "ClickUp ticket sync",

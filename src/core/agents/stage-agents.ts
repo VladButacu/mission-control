@@ -119,7 +119,7 @@ async function migrateLegacyStageOverrides(
 
 export async function loadStageAgentOverrides(root: string): Promise<StageAgentOverrides> {
   await ensureHarnessRepository(root);
-  const raw = await readJsonFile<StageAgentOverrides>(stageAgentsPath(root), { overrides: {} });
+  const raw = await readJsonFile<StageAgentOverrides>(root, stageAgentsPath(root), { overrides: {} });
   const { config, migrated } = await migrateLegacyStageOverrides(root, raw);
   if (migrated) {
     await saveStageAgentOverrides(root, config);
@@ -156,7 +156,7 @@ export function unregisteredModelPoolMessage(poolId: string): string {
 }
 
 async function saveStageAgentOverrides(root: string, config: StageAgentOverrides): Promise<void> {
-  await writeJsonFile(stageAgentsPath(root), config);
+  await writeJsonFile(root, stageAgentsPath(root), config);
 }
 
 export async function setStageAgentOverride(

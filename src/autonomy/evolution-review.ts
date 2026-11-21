@@ -28,7 +28,7 @@ interface RunSnapshot {
 let pendingReviewRunIds: string[] = [];
 
 async function loadUnreviewedRuns(root: string): Promise<RunSnapshot[]> {
-  const reviewed = await readJsonFile<EvolutionReviewedEntry[]>(evolutionReviewedPath(root), []);
+  const reviewed = await readJsonFile<EvolutionReviewedEntry[]>(root, evolutionReviewedPath(root), []);
   const reviewedIds = new Set(reviewed.map((entry) => entry.runId));
 
   const allRuns = await listAllRuns(root);
@@ -112,10 +112,10 @@ End with a short operator handoff: how many runs you reviewed, which cross-run p
 
 async function markRunsReviewed(root: string): Promise<void> {
   if (!pendingReviewRunIds.length) return;
-  const reviewed = await readJsonFile<EvolutionReviewedEntry[]>(evolutionReviewedPath(root), []);
+  const reviewed = await readJsonFile<EvolutionReviewedEntry[]>(root, evolutionReviewedPath(root), []);
   const timestamp = now();
   const newEntries = pendingReviewRunIds.map((runId) => ({ runId, reviewedAt: timestamp }));
-  await writeJsonFile(evolutionReviewedPath(root), [...reviewed, ...newEntries]);
+  await writeJsonFile(root, evolutionReviewedPath(root), [...reviewed, ...newEntries]);
   pendingReviewRunIds = [];
 }
 

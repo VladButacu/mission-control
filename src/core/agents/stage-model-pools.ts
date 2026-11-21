@@ -28,7 +28,7 @@ export function lookupStageModelPoolOverride(
 
 export async function loadStageModelPoolOverrides(root: string): Promise<StageModelPoolOverrides> {
   await ensureHarnessRepository(root);
-  const raw = await readJsonFile<StageModelPoolOverrides>(stageModelPoolsPath(root), { overrides: {} });
+  const raw = await readJsonFile<StageModelPoolOverrides>(root, stageModelPoolsPath(root), { overrides: {} });
   const workflows = await loadAllWorkflows(root);
   const owners = new Map<string, string[]>();
   for (const [workflowId, workflow] of workflows) {
@@ -59,7 +59,7 @@ async function saveStageModelPoolOverrides(
   root: string,
   config: StageModelPoolOverrides
 ): Promise<void> {
-  await writeJsonFile(stageModelPoolsPath(root), config);
+  await writeJsonFile(root, stageModelPoolsPath(root), config);
 }
 
 export async function setStageModelPoolOverride(

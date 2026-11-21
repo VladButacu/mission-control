@@ -15,6 +15,18 @@ const DEFAULT_FILE_LOCK_OPTIONS: Required<FileLockOptions> = {
   staleMs: 30_000
 };
 
+/**
+ * Resolve `filePath` under the containing `root`. Every helper below calls this before it touches
+ * the disk, so a path that escapes its root throws instead of reading or writing elsewhere.
+ */
+function pathWithin(root: string, filePath: string): string {
+  const resolved = containedPath(root, filePath);
+  if (!resolved) {
+    throw new Error(`Path must stay inside ${root}: ${filePath}`);
+  }
+  return resolved;
+}
+
 function lockPathFor(filePath: string): string {
   return `${filePath}.lock`;
 }
@@ -33,9 +45,13 @@ async function isPidAlive(pid: number): Promise<boolean> {
   }
 }
 
-async function readLockMeta(lockPath: string): Promise<{ pid: number; acquiredAt: number; owner?: string } | null> {
+async function readLockMeta(
+  root: string,
+  lockPath: string
+): Promise<{ pid: number; acquiredAt: number; owner?: string } | null> {
+  const safeLock = pathWithin(root, lockPath);
   try {
-    const raw = await readFile(lockPath, "utf8");
+    const raw = await readFile(safeLock, "utf8");
     const parsed = JSON.parse(raw) as { pid?: unknown; acquiredAt?: unknown; owner?: unknown };
     if (typeof parsed.pid === "number" && typeof parsed.acquiredAt === "number") {
       return {
@@ -50,14 +66,15 @@ async function readLockMeta(lockPath: string): Promise<{ pid: number; acquiredAt
   return null;
 }
 
-async function tryClearStaleLock(lockPath: string, staleMs: number): Promise<boolean> {
-  const meta = await readLockMeta(lockPath);
+async function tryClearStaleLock(root: string, lockPath: string, staleMs: number): Promise<boolean> {
+  const safeLock = pathWithin(root, lockPath);
+  const meta = await readLockMeta(root, safeLock);
   if (meta) {
     const ageMs = Date.now() - meta.acquiredAt;
     const alive = await isPidAlive(meta.pid);
     if (ageMs > staleMs || !alive) {
       try {
-        await rm(lockPath, { force: true });
+        await rm(safeLock, { force: true });
         return true;
       } catch {
         return false;
@@ -73,14 +90,14 @@ async function tryClearStaleLock(lockPath: string, staleMs: number): Promise<boo
   // stale window (a holder that crashed mid-write).
   let ageMs: number;
   try {
-    const stats = await stat(lockPath);
+    const stats = await stat(safeLock);
     ageMs = Date.now() - stats.mtimeMs;
   } catch {
     return true; // file does not exist — nothing holds it
   }
   if (ageMs > staleMs) {
     try {
-      await rm(lockPath, { force: true });
+      await rm(safeLock, { force: true });
       return true;
     } catch {
       return false;
@@ -89,61 +106,66 @@ async function tryClearStaleLock(lockPath: string, staleMs: number): Promise<boo
   return false;
 }
 
-async function acquireFileLock(lockPath: string, options: Required<FileLockOptions>): Promise<string> {
+async function acquireFileLock(root: string, lockPath: string, options: Required<FileLockOptions>): Promise<string> {
+  const safeLock = pathWithin(root, lockPath);
   const owner = `${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}`;
   for (let attempt = 0; attempt < options.maxAttempts; attempt++) {
     try {
-      await ensureDir(path.dirname(lockPath));
+      await ensureDir(root, path.dirname(safeLock));
       const meta = { pid: process.pid, acquiredAt: Date.now(), owner };
-      await writeFile(lockPath, `${JSON.stringify(meta)}\n`, { flag: "wx" });
+      await writeFile(safeLock, `${JSON.stringify(meta)}\n`, { flag: "wx" });
       return owner;
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code;
       if (code !== "EEXIST") {
         throw err;
       }
-      if (await tryClearStaleLock(lockPath, options.staleMs)) {
+      if (await tryClearStaleLock(root, safeLock, options.staleMs)) {
         continue;
       }
       await sleep(options.retryDelayMs);
     }
   }
-  throw new Error(`Timed out acquiring lock for ${lockPath}`);
+  throw new Error(`Timed out acquiring lock for ${safeLock}`);
 }
 
-async function releaseFileLock(lockPath: string, owner: string): Promise<void> {
-  const meta = await readLockMeta(lockPath);
+async function releaseFileLock(root: string, lockPath: string, owner: string): Promise<void> {
+  const safeLock = pathWithin(root, lockPath);
+  const meta = await readLockMeta(root, safeLock);
   if (meta?.owner !== owner) {
     return;
   }
-  await rm(lockPath, { force: true });
+  await rm(safeLock, { force: true });
 }
 
-export async function ensureDir(dir: string): Promise<void> {
-  await mkdir(dir, { recursive: true });
+export async function ensureDir(root: string, dir: string): Promise<void> {
+  await mkdir(pathWithin(root, dir), { recursive: true });
 }
 
-export async function writeFileIfMissing(filePath: string, content: string): Promise<void> {
+export async function writeFileIfMissing(root: string, filePath: string, content: string): Promise<void> {
+  const file = pathWithin(root, filePath);
   try {
-    await readFile(filePath, "utf8");
+    await readFile(file, "utf8");
   } catch {
-    await ensureDir(path.dirname(filePath));
-    await writeFile(filePath, content, "utf8");
+    await ensureDir(root, path.dirname(file));
+    await writeFile(file, content, "utf8");
   }
 }
 
-export async function readJsonFile<T>(filePath: string, fallback: T): Promise<T> {
+export async function readJsonFile<T>(root: string, filePath: string, fallback: T): Promise<T> {
+  const file = pathWithin(root, filePath);
   try {
-    return JSON.parse(await readFile(filePath, "utf8")) as T;
+    return JSON.parse(await readFile(file, "utf8")) as T;
   } catch {
     return fallback;
   }
 }
 
 /** Whether a path exists on disk (swallows ENOENT and other stat errors). */
-export async function pathExists(filePath: string): Promise<boolean> {
+export async function pathExists(root: string, filePath: string): Promise<boolean> {
+  const file = pathWithin(root, filePath);
   try {
-    await stat(filePath);
+    await stat(file);
     return true;
   } catch {
     return false;
@@ -151,44 +173,48 @@ export async function pathExists(filePath: string): Promise<boolean> {
 }
 
 /** Read a UTF-8 file, or `null` when it is missing or unreadable. */
-export async function readTextFile(filePath: string): Promise<string | null> {
+export async function readTextFile(root: string, filePath: string): Promise<string | null> {
+  const file = pathWithin(root, filePath);
   try {
-    return await readFile(filePath, "utf8");
+    return await readFile(file, "utf8");
   } catch {
     return null;
   }
 }
 
-export async function writeJsonFile<T>(filePath: string, data: T): Promise<void> {
-  await ensureDir(path.dirname(filePath));
+export async function writeJsonFile<T>(root: string, filePath: string, data: T): Promise<void> {
+  const file = pathWithin(root, filePath);
+  await ensureDir(root, path.dirname(file));
   const unique = `${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}`;
-  const tempPath = `${filePath}.${unique}.tmp`;
+  const tempPath = pathWithin(root, `${file}.${unique}.tmp`);
   await writeFile(tempPath, `${JSON.stringify(data, null, 2)}\n`, "utf8");
-  await rename(tempPath, filePath);
+  await rename(tempPath, file);
 }
 
 export async function updateJsonFile<T>(
+  root: string,
   filePath: string,
   fallback: T,
   updater: (current: T) => T | Promise<T>,
   lockOptions?: FileLockOptions
 ): Promise<T> {
   const options = { ...DEFAULT_FILE_LOCK_OPTIONS, ...lockOptions };
-  const lockPath = lockPathFor(filePath);
-  const owner = await acquireFileLock(lockPath, options);
+  const lockPath = lockPathFor(pathWithin(root, filePath));
+  const owner = await acquireFileLock(root, lockPath, options);
   try {
-    const current = await readJsonFile(filePath, fallback);
+    const current = await readJsonFile(root, filePath, fallback);
     const next = await updater(current);
-    await writeJsonFile(filePath, next);
+    await writeJsonFile(root, filePath, next);
     return next;
   } finally {
-    await releaseFileLock(lockPath, owner);
+    await releaseFileLock(root, lockPath, owner);
   }
 }
 
-export async function listFileNames(dir: string): Promise<string[]> {
+export async function listFileNames(root: string, dir: string): Promise<string[]> {
+  const target = pathWithin(root, dir);
   try {
-    return await readdir(dir);
+    return await readdir(target);
   } catch {
     return [];
   }

@@ -121,7 +121,7 @@ export async function writeGbrainMcpConfig(opts: {
   }
 
   if (opts.tool.adapter === "claude") {
-    await ensureDir(opts.runDir);
+    await ensureDir(opts.harnessRoot, opts.runDir);
     const config = {
       mcpServers: {
         gbrain: {
@@ -141,7 +141,7 @@ export async function writeGbrainMcpConfig(opts: {
   }
 
   if (opts.tool.adapter === "opencode") {
-    await ensureDir(opts.runDir);
+    await ensureDir(opts.harnessRoot, opts.runDir);
     const config = {
       mcp: {
         gbrain: {

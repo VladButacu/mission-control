@@ -161,7 +161,7 @@ describe("stage agents", () => {
   });
 
   it("migrates unambiguous legacy overrides to scoped keys", async () => {
-    await writeJsonFile(path.join(root, "data", "state", "stage-agents.json"), {
+    await writeJsonFile(root, path.join(root, "data", "state", "stage-agents.json"), {
       overrides: { fix: "grok" }
     });
     const config = await loadStageAgentOverrides(root);
@@ -171,7 +171,7 @@ describe("stage agents", () => {
   });
 
   it("preserves orphan legacy overrides in ambiguousLegacy", async () => {
-    await writeJsonFile(path.join(root, "data", "state", "stage-agents.json"), {
+    await writeJsonFile(root, path.join(root, "data", "state", "stage-agents.json"), {
       overrides: { deleted_step: "grok" }
     });
     const config = await loadStageAgentOverrides(root);
@@ -183,7 +183,7 @@ describe("stage agents", () => {
     const codeFeatureBaseline = await resolveAgentForStep(root, "code-feature", "review");
     const bugfixBaseline = await resolveAgentForStep(root, "bugfix", "review");
     const legacyAgent: ToolId = codeFeatureBaseline === "claude" ? "codex" : "claude";
-    await writeJsonFile(path.join(root, "data", "state", "stage-agents.json"), {
+    await writeJsonFile(root, path.join(root, "data", "state", "stage-agents.json"), {
       overrides: { review: legacyAgent }
     });
     const config = await loadStageAgentOverrides(root);
@@ -196,7 +196,7 @@ describe("stage agents", () => {
   it("adopts an ambiguous legacy override for a chosen workflow", async () => {
     const bugfixBaseline = await resolveAgentForStep(root, "bugfix", "review");
     const legacyAgent: ToolId = bugfixBaseline === "claude" ? "codex" : "claude";
-    await writeJsonFile(path.join(root, "data", "state", "stage-agents.json"), {
+    await writeJsonFile(root, path.join(root, "data", "state", "stage-agents.json"), {
       overrides: { review: legacyAgent }
     });
     await loadStageAgentOverrides(root);
@@ -215,7 +215,7 @@ describe("stage agents", () => {
       ...bundle,
       tools: bundle.tools.map((tool) => tool.id === "claude" ? { ...tool, enabled: false } : tool)
     });
-    await writeJsonFile(path.join(root, "data", "state", "stage-agents.json"), {
+    await writeJsonFile(root, path.join(root, "data", "state", "stage-agents.json"), {
       overrides: { review: "claude" }
     });
     await loadStageAgentOverrides(root);

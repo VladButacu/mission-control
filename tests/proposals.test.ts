@@ -134,7 +134,7 @@ describe("harness proposals", () => {
     await ensureHarnessRepository(root);
     const tasksPath = path.join(root, "data", "state", "tasks.json");
     const { writeJsonFile } = await import("../src/core/infra/fs.ts");
-    await writeJsonFile(tasksPath, [
+    await writeJsonFile(root, tasksPath, [
       {
         id: "legacy-proposal-1",
         title: "Kernel note",

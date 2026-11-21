@@ -38,7 +38,7 @@ export interface SkillSummaryWithCategory extends SkillSummary {
 
 export async function listSkills(root: string): Promise<SkillSummary[]> {
   const dir = path.join(root, "skills");
-  const names = (await listFileNames(dir)).sort();
+  const names = (await listFileNames(root, dir)).sort();
   const out: SkillSummary[] = [];
   for (const skillName of names) {
     if (skillName === "README.md") continue;

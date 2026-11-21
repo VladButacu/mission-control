@@ -13,9 +13,9 @@ const EMPTY: ExtensionRegistry = { extensions: [] };
 
 export async function loadExtensionRegistry(root: string): Promise<ExtensionRegistry> {
   await ensureHarnessRepository(root);
-  const stored = await readJsonFile<unknown>(registryPath(root), null);
+  const stored = await readJsonFile<unknown>(root, registryPath(root), null);
   if (!stored) {
-    await writeJsonFile(registryPath(root), EMPTY);
+    await writeJsonFile(root, registryPath(root), EMPTY);
     return { ...EMPTY };
   }
   return normalizeRegistry(stored);
@@ -27,7 +27,7 @@ async function mutateRegistry(
 ): Promise<ExtensionRegistry> {
   await ensureHarnessRepository(root);
   await loadExtensionRegistry(root);
-  return updateJsonFile<ExtensionRegistry>(registryPath(root), EMPTY, (current) =>
+  return updateJsonFile<ExtensionRegistry>(root, registryPath(root), EMPTY, (current) =>
     normalizeRegistry(mutator(normalizeRegistry(current)))
   );
 }

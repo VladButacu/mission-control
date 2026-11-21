@@ -29,7 +29,7 @@ function statePath(root: string): string {
 }
 
 export async function getClickUpSyncState(root: string): Promise<ClickUpSyncState> {
-  return readJsonFile<ClickUpSyncState>(statePath(root), { listCursors: {}, tasks: {} });
+  return readJsonFile<ClickUpSyncState>(root, statePath(root), { listCursors: {}, tasks: {} });
 }
 
 export async function updateClickUpSyncState(
@@ -37,7 +37,7 @@ export async function updateClickUpSyncState(
   updater: (state: ClickUpSyncState) => ClickUpSyncState
 ): Promise<ClickUpSyncState> {
   const updated = updater(await getClickUpSyncState(root));
-  await writeJsonFile(statePath(root), updated);
+  await writeJsonFile(root, statePath(root), updated);
   return updated;
 }
 

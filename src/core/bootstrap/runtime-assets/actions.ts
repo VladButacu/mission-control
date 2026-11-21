@@ -175,14 +175,14 @@ export async function resetRuntimeAsset(
 
   const backupDir = containedPath(runtimeAssetBackupDir(root), path.join(kind, id));
   if (!backupDir) throw new Error(`Invalid ${kind} id: ${id}`);
-  await ensureDir(backupDir);
+  await ensureDir(root, backupDir);
   const backupPath = path.join(backupDir, `${Date.now()}.bak`);
   await writeFile(backupPath, diff.runtimeBody, "utf8");
 
   if (kind === "workflow") {
     const filePath = containedPath(workflowsDir(root), `${id}.yml`);
     if (!filePath) throw new Error(`Invalid workflow id: ${id}`);
-    await ensureDir(path.dirname(filePath));
+    await ensureDir(root, path.dirname(filePath));
     await writeFile(filePath, diff.bundledBody, "utf8");
     const manifest = await readRuntimeAssetsManifest(root);
     manifest.workflows[id] = {
@@ -195,7 +195,7 @@ export async function resetRuntimeAsset(
   } else {
     const skillPath = containedPath(path.join(root, "skills"), path.join(id, "SKILL.md"));
     if (!skillPath) throw new Error(`Invalid skill id: ${id}`);
-    await ensureDir(path.dirname(skillPath));
+    await ensureDir(root, path.dirname(skillPath));
     await writeFile(skillPath, diff.bundledBody, "utf8");
     const manifest = await readRuntimeAssetsManifest(root);
     manifest.skills[id] = {

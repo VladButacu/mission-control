@@ -89,19 +89,19 @@ export async function ensureHarnessRepository(root = DEFAULT_HARNESS_ROOT): Prom
     "data/memory",
     "data/memory/pages"
   ]) {
-    await ensureDir(path.join(root, dir));
+    await ensureDir(root, path.join(root, dir));
   }
 
   for (const [fileName, content] of Object.entries(DEFAULT_KERNEL_FILES)) {
-    await writeFileIfMissing(path.join(root, "kernel", fileName), content);
+    await writeFileIfMissing(root, path.join(root, "kernel", fileName), content);
   }
 
-  await writeFileIfMissing(path.join(root, "skills", "README.md"), "# Mission Control Skills\n\nApproved reusable skills live here.\n");
+  await writeFileIfMissing(root, path.join(root, "skills", "README.md"), "# Mission Control Skills\n\nApproved reusable skills live here.\n");
   await migrateRuntimeAssets(root);
-  await writeFileIfMissing(path.join(root, "data", "runs", ".gitkeep"), "");
-  await writeFileIfMissing(path.join(root, "data", "state", "tasks.json"), "[]\n");
-  await writeFileIfMissing(path.join(root, "data", "state", "runs.json"), "[]\n");
-  await writeFileIfMissing(
+  await writeFileIfMissing(root, path.join(root, "data", "runs", ".gitkeep"), "");
+  await writeFileIfMissing(root, path.join(root, "data", "state", "tasks.json"), "[]\n");
+  await writeFileIfMissing(root, path.join(root, "data", "state", "runs.json"), "[]\n");
+  await writeFileIfMissing(root, 
     path.join(root, "data", "state", "settings.json"),
     JSON.stringify(
       {

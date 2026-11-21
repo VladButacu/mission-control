@@ -69,7 +69,7 @@ export function pendingQualityGate(): QualityGateFile {
 
 /** The stored config, or a `pending` placeholder when nothing has been generated. */
 export async function readProjectQualityGate(root: string, projectId: string): Promise<QualityGateFile> {
-  const stored = await readJsonFile<QualityGateFile | null>(qualityGatePath(root, projectId), null);
+  const stored = await readJsonFile<QualityGateFile | null>(root, qualityGatePath(root, projectId), null);
   if (stored && typeof stored.status === "string" && Array.isArray(stored.checks)) {
     return stored;
   }
@@ -78,8 +78,8 @@ export async function readProjectQualityGate(root: string, projectId: string): P
 
 /** Persist a quality-gate config under the project's state dir. */
 export async function writeQualityGate(root: string, projectId: string, file: QualityGateFile): Promise<void> {
-  await ensureDir(projectDir(root, projectId));
-  await writeJsonFile(qualityGatePath(root, projectId), file);
+  await ensureDir(root, projectDir(root, projectId));
+  await writeJsonFile(root, qualityGatePath(root, projectId), file);
   emitStateChange(["chrome"]);
 }
 
@@ -106,7 +106,7 @@ export async function readProjectQualityGateRun(
   root: string,
   projectId: string
 ): Promise<QualityGateRunFile | null> {
-  return readJsonFile<QualityGateRunFile | null>(qualityGateRunPath(root, projectId), null);
+  return readJsonFile<QualityGateRunFile | null>(root, qualityGateRunPath(root, projectId), null);
 }
 
 export async function writeProjectQualityGateRun(
@@ -114,8 +114,8 @@ export async function writeProjectQualityGateRun(
   projectId: string,
   run: QualityGateRunFile
 ): Promise<void> {
-  await ensureDir(projectDir(root, projectId));
-  await writeJsonFile(qualityGateRunPath(root, projectId), run);
+  await ensureDir(root, projectDir(root, projectId));
+  await writeJsonFile(root, qualityGateRunPath(root, projectId), run);
 }
 
 const VALID_AGENT_STATUSES = new Set<QualityGateStatus>(["ready", "incomplete"]);

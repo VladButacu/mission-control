@@ -23,7 +23,7 @@ function connectorsPath(root: string): string {
 }
 
 export async function listConnections(root: string): Promise<ConnectorConnection[]> {
-  const file = await readJsonFile<ConnectorsFile>(connectorsPath(root), { connections: [] });
+  const file = await readJsonFile<ConnectorsFile>(root, connectorsPath(root), { connections: [] });
   return file.connections.map(normalizeConnection);
 }
 
@@ -40,7 +40,7 @@ export async function saveConnection(root: string, connection: ConnectorConnecti
   } else {
     connections.push(connection);
   }
-  await writeJsonFile(connectorsPath(root), { connections });
+  await writeJsonFile(root, connectorsPath(root), { connections });
   return connection;
 }
 
@@ -50,7 +50,7 @@ export async function deleteConnection(root: string, connectionId: string): Prom
   if (next.length === connections.length) {
     return false;
   }
-  await writeJsonFile(connectorsPath(root), { connections: next });
+  await writeJsonFile(root, connectorsPath(root), { connections: next });
   return true;
 }
 

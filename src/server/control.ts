@@ -57,8 +57,8 @@ export function serverInfoPath(root: string): string {
 
 /** Record the running server's identity so `mission-control stop` can reach it. */
 export async function writeServerInfo(root: string, info: ServerInfo): Promise<void> {
-  await ensureDir(path.dirname(serverInfoPath(root)));
-  await writeJsonFile(serverInfoPath(root), info);
+  await ensureDir(root, path.dirname(serverInfoPath(root)));
+  await writeJsonFile(root, serverInfoPath(root), info);
 }
 
 /** Remove the server-info file (called during graceful shutdown). */

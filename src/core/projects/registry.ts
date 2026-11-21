@@ -64,7 +64,7 @@ export function resolveGitTopLevel(repoPath: string): string | null {
 
 async function readStoredProjects(root: string): Promise<ProjectRecord[]> {
   await ensureHarnessRepository(root);
-  return readJsonFile<ProjectRecord[]>(projectsPath(root), []);
+  return readJsonFile<ProjectRecord[]>(root, projectsPath(root), []);
 }
 
 export async function listProjects(root: string): Promise<ProjectRecord[]> {
@@ -114,9 +114,9 @@ export async function onboardProject(root: string, input: OnboardProjectInput): 
   };
 
   const dir = projectDir(root, id);
-  await ensureDir(dir);
+  await ensureDir(root, dir);
 
-  await writeJsonFile(projectsPath(root), [...projects, record]);
+  await writeJsonFile(root, projectsPath(root), [...projects, record]);
   return record;
 }
 
@@ -159,7 +159,7 @@ export async function updateProject(root: string, projectId: string, input: Upda
     ...(normalizedRepoPath !== undefined ? { repoPath: normalizedRepoPath } : {}),
     updatedAt: now()
   };
-  await writeJsonFile(projectsPath(root), projects);
+  await writeJsonFile(root, projectsPath(root), projects);
   return projects[index]!;
 }
 
@@ -169,7 +169,7 @@ export async function removeProject(root: string, projectId: string): Promise<vo
   if (remaining.length === projects.length) {
     throw new Error(`Project not found: ${projectId}`);
   }
-  await writeJsonFile(projectsPath(root), remaining);
+  await writeJsonFile(root, projectsPath(root), remaining);
   const dir = projectDir(root, projectId);
   await rm(dir, { recursive: true, force: true }).catch(() => {});
 }
