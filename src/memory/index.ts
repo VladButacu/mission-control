@@ -8,6 +8,7 @@ import { containedPath } from "../core/paths/contained.ts";
 import { projectDir } from "../core/projects/registry.ts";
 import { deriveExecution } from "../core/tasks/status.ts";
 import { listRuns } from "../core/tasks/runs.ts";
+import { isRunId } from "../core/tasks/run-id.ts";
 import { listTasks } from "../core/tasks/tasks.ts";
 import { getMemoryPage, listMemoryPages, normalizeSlug } from "./store.ts";
 import { rankSearchResults, tokenize } from "./search-utils.ts";
@@ -139,6 +140,7 @@ export async function buildMemoryIndex(
   }
 
   for (const run of runs) {
+    if (!isRunId(run.id)) continue;
     documents.push({
       id: `run:${run.id}`,
       sourceType: "run",
@@ -149,8 +151,7 @@ export async function buildMemoryIndex(
       updatedAt: run.completedAt ?? run.startedAt
     });
 
-    const runDir = containedPath(path.join(root, "data", "runs"), run.id);
-    if (!runDir) continue;
+    const runDir = path.join(root, "data", "runs", run.id);
 
     for (const artifact of run.artifacts) {
       const artifactPath = containedPath(runDir, artifact);

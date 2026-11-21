@@ -7,6 +7,7 @@ import { emitStateChange, type StateScope } from "../infra/state-bus.ts";
 import { ensureHarnessRepository } from "../bootstrap/repository.ts";
 import { listProjects, projectDir } from "../projects/registry.ts";
 import { EntityNotFoundError } from "./errors.ts";
+import { isRunId } from "./run-id.ts";
 import type { HarnessRun } from "../types.ts";
 
 /**
@@ -103,7 +104,7 @@ export async function cleanRuns(root: string, projectId?: string): Promise<{ del
   await writeJsonFile(root, runsPathFor(root, projectId), kept);
   emitStateChange(["chrome", "runs"]);
   await Promise.all(
-    deleted.map((run) => rm(runDir(root, run.id), { recursive: true, force: true }))
+    deleted.filter((run) => isRunId(run.id)).map((run) => rm(runDir(root, run.id), { recursive: true, force: true }))
   );
   return { deleted: deleted.length };
 }
