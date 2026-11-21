@@ -51,7 +51,7 @@ const SECTION_GROUPS: Array<{
       { id: "connectors", icon: "external-link", name: "Connectors", sub: "GitHub, ClickUp, and more" },
       { id: "skills", icon: "sparkles", name: "Skills", sub: "Agent skill catalog" },
       { id: "workflows", icon: "workflow", name: "Workflows", sub: "Workflow definitions" },
-      { id: "maintenance", icon: "activity", name: "Maintenance", sub: "Daemon jobs & shutdown" }
+      { id: "maintenance", icon: "activity", name: "Maintenance", sub: "Daemon jobs" }
     ]
   },
   {
