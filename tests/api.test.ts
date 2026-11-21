@@ -1,4 +1,5 @@
 import { mkdtemp, rm } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import request from "supertest";
@@ -211,7 +212,7 @@ describe("mission-control API", () => {
     // Drop supertest's .expect(200) and assert manually so a non-200 response
     // surfaces its body in the failure message, revealing the 404's source
     // (route fallback vs. handler catch) instead of just the status code.
-    const res = await request(app).get("/api/runs/missing-run-id/tail?since=0");
+    const res = await request(app).get(`/api/runs/${randomUUID()}/tail?since=0`);
     expect(res.status, `unexpected tail response body: ${JSON.stringify(res.body)}`).toBe(200);
     expect(res.body).toEqual({ size: 0, chunk: "", endOfFile: false });
   });
