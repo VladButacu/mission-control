@@ -46,11 +46,17 @@ function pagePath(root: string, projectId: string, slug: string): string {
   return path.join(pagesRoot(root, projectId), `${normalizeSlug(slug)}.md`);
 }
 
+/** Strips leading and trailing slashes in one linear pass (a `/\/+$/` regex is quadratic on long slash runs). */
+function trimSlashes(value: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end && value[start] === "/") start++;
+  while (end > start && value[end - 1] === "/") end--;
+  return value.slice(start, end);
+}
+
 export function normalizeSlug(slug: string): string {
-  const normalized = slug
-    .trim()
-    .replace(/\\/g, "/")
-    .replace(/^\/+|\/+$/g, "")
+  const normalized = trimSlashes(slug.trim().replace(/\\/g, "/"))
     .replace(/[^a-zA-Z0-9/_-]+/g, "-")
     .replace(/-+/g, "-")
     .toLowerCase();
