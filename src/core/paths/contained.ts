@@ -10,5 +10,8 @@ export function containedPath(root: string, candidate: string): string | undefin
   const base = path.resolve(root);
   const prefix = base.endsWith(path.sep) ? base : `${base}${path.sep}`;
   const resolved = path.resolve(base, candidate);
-  return resolved === base || resolved.startsWith(prefix) ? resolved : undefined;
+  if (resolved !== base && !resolved.startsWith(prefix)) {
+    return undefined;
+  }
+  return resolved;
 }
