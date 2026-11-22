@@ -216,7 +216,7 @@ export async function executeAgentTurn(root: string, internal: RunTurnInternal):
   });
 
   const runDir = path.join(root, "data", "runs", run.id);
-  await ensureDir(runDir);
+  await ensureDir(root, runDir);
   const logPath = path.join(runDir, "log.txt");
   await writeFile(path.join(runDir, "prompt.md"), prompt, "utf8");
   await writeFile(logPath, "", "utf8");

@@ -50,7 +50,7 @@ function attachmentsRegistryPath(root: string): string {
 type AttachmentRegistry = Record<string, HarnessAttachment>;
 
 async function readRegistry(root: string): Promise<AttachmentRegistry> {
-  return readJsonFile<AttachmentRegistry>(attachmentsRegistryPath(root), {});
+  return readJsonFile<AttachmentRegistry>(root, attachmentsRegistryPath(root), {});
 }
 
 /** True only for uuid-shaped ids. Used to reject traversal-shaped ids at the
@@ -132,9 +132,9 @@ async function persistAttachment(root: string, input: PersistInput): Promise<Har
   };
   // Blob first, registry second: a failed registry write may orphan a blob, but
   // never leaves a registry reference pointing at a missing file.
-  await ensureDir(attachmentsFilesDir(root));
+  await ensureDir(root, attachmentsFilesDir(root));
   await writeFile(path.join(attachmentsFilesDir(root), id), input.bytes);
-  await updateJsonFile<AttachmentRegistry>(
+  await updateJsonFile<AttachmentRegistry>(root, 
     attachmentsRegistryPath(root),
     {},
     (registry) => ({ ...registry, [id]: record })

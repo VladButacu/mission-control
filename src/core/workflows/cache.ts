@@ -20,7 +20,7 @@ export function workflowFilePath(root: string, workflowId: string): string {
 
 export async function ensureWorkflowFiles(root: string): Promise<void> {
   const targetDir = workflowsDir(root);
-  await ensureDir(targetDir);
+  await ensureDir(root, targetDir);
   await rm(path.join(targetDir, "ticket.yml"), { force: true });
   await migrateRuntimeAssets(root);
 }

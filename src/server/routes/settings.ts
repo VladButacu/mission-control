@@ -26,6 +26,7 @@ import { getIntakeSession } from "../../core/intake/intake.ts";
 import { ensureHarnessRepository } from "../../core/bootstrap/repository.ts";
 import { loadHarnessSettings, updateHarnessSettings, type HarnessSettings } from "../../core/settings.ts";
 import { completeTargets } from "../../core/paths/targets.ts";
+import { containedPath } from "../../core/paths/contained.ts";
 import { DEFAULT_WORKFLOW_ID, listWorkflowSummaries, loadWorkflow, toWorkflowMetadata } from "../../core/workflows/index.ts";
 import { loadConnectorsState } from "../../connectors/connections.ts";
 import { listAllMemoryPages } from "../../memory/store.ts";
@@ -35,9 +36,11 @@ import { listTasks } from "../../core/tasks/tasks.ts";
 import { listInflightTaskIds } from "../../runtime/sessions.ts";
 import { listInteractiveWaits } from "../../terminal/interactive-control.ts";
 import { asyncRoute, param, type ServerOptions } from "./helpers.ts";
+import { createRouteRateLimiter } from "../rate-limit.ts";
 
 export function createSettingsRouter(options: ServerOptions): Router {
   const router = Router();
+  const kernelLimiter = createRouteRateLimiter(60);
 
   router.get(
     "/state",
@@ -89,9 +92,6 @@ export function createSettingsRouter(options: ServerOptions): Router {
       const defaultWorkflow = await loadWorkflow(options.root, DEFAULT_WORKFLOW_ID);
       res.json({
         root: options.root,
-        // Per-server shutdown token for the same-origin UI, which echoes it back
-        // in the x-shutdown-token header when the operator confirms shutdown.
-        shutdownToken: options.shutdownToken ?? "",
         connectors: await loadConnectorsState(options.root),
         tasks,
         runs,
@@ -313,11 +313,17 @@ export function createSettingsRouter(options: ServerOptions): Router {
 
   router.get(
     "/kernel/:section",
+    kernelLimiter,
     asyncRoute(async (req, res) => {
       const { readFile } = await import("node:fs/promises");
       const section = param(req.params["section"], "section").replace(/[^a-z0-9-]/gi, "");
+      const sectionFile = containedPath(path.join(options.root, "kernel"), `${section}.md`);
+      if (!sectionFile) {
+        res.status(404).json({ error: "Section not found." });
+        return;
+      }
       try {
-        const content = await readFile(path.join(options.root, "kernel", `${section}.md`), "utf8");
+        const content = await readFile(sectionFile, "utf8");
         res.json({ name: section, content });
       } catch {
         res.status(404).json({ error: "Section not found." });

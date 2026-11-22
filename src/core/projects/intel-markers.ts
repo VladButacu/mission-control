@@ -98,7 +98,7 @@ async function detectNodeCommands(
   repoPath: string,
   lockfiles: Set<string>
 ): Promise<{ commands: DetectedCommand[]; scripts: Record<string, string> } | null> {
-  const raw = await readTextFile(path.join(repoPath, "package.json"));
+  const raw = await readTextFile(repoPath, path.join(repoPath, "package.json"));
   if (raw === null) return null;
 
   let scripts: Record<string, string> = {};
@@ -148,7 +148,7 @@ async function detectPythonCommands(
   repoPath: string,
   lockfiles: Set<string>
 ): Promise<DetectedCommand[] | null> {
-  const pyproject = await readTextFile(path.join(repoPath, "pyproject.toml"));
+  const pyproject = await readTextFile(repoPath, path.join(repoPath, "pyproject.toml"));
   if (pyproject === null) return null;
 
   const runner = detectPythonRunner(pyproject, lockfiles);
@@ -175,7 +175,7 @@ async function detectPythonCommands(
 async function detectMakefilePath(repoPath: string): Promise<string | null> {
   for (const name of ["Makefile", "makefile", "GNUmakefile"]) {
     const candidate = path.join(repoPath, name);
-    if (await pathExists(candidate)) return candidate;
+    if (await pathExists(repoPath, candidate)) return candidate;
   }
   return null;
 }
@@ -183,7 +183,7 @@ async function detectMakefilePath(repoPath: string): Promise<string | null> {
 async function detectMakefileCommands(repoPath: string): Promise<DetectedCommand[] | null> {
   const makePath = await detectMakefilePath(repoPath);
   if (!makePath) return null;
-  const text = await readTextFile(makePath);
+  const text = await readTextFile(repoPath, makePath);
   if (text === null) return null;
 
   const commands: DetectedCommand[] = [];
@@ -213,7 +213,7 @@ export async function detectMarkers(
   const lockfiles = new Set<string>();
 
   for (const lock of LOCKFILES) {
-    if (await pathExists(path.join(repoPath, lock.file))) {
+    if (await pathExists(repoPath, path.join(repoPath, lock.file))) {
       lockfiles.add(lock.file);
       markers.push(marker(lock.file, "lockfile", lock.stack));
     }
@@ -221,7 +221,7 @@ export async function detectMarkers(
 
   for (const entry of MARKER_FILES) {
     for (const file of entry.file) {
-      if (await pathExists(path.join(repoPath, file))) {
+      if (await pathExists(repoPath, path.join(repoPath, file))) {
         markers.push(marker(file, entry.purpose, entry.stack));
         break;
       }
@@ -275,7 +275,7 @@ const WORKSPACE_DIRS = ["apps", "libs", "packages"] as const;
 export async function detectBuildConfigs(repoPath: string): Promise<string[]> {
   const present: string[] = [];
   for (const file of BUILD_CONFIG_FILES) {
-    if (await pathExists(path.join(repoPath, file))) present.push(file);
+    if (await pathExists(repoPath, path.join(repoPath, file))) present.push(file);
   }
   for (const dir of WORKSPACE_DIRS) {
     let entries: Dirent[];
@@ -287,7 +287,7 @@ export async function detectBuildConfigs(repoPath: string): Promise<string[]> {
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
       const rel = path.join(dir, entry.name, "project.json");
-      if (await pathExists(path.join(repoPath, rel))) {
+      if (await pathExists(repoPath, path.join(repoPath, rel))) {
         present.push(rel);
         if (present.length >= 24) return [...new Set(present)];
       }

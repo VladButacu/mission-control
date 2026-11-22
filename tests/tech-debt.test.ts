@@ -67,14 +67,14 @@ describe("tech-debt ledger", () => {
 
     await Promise.all(
       labels.map((label) =>
-        updateJsonFile<string[]>(ledgerPath, [], (current) => {
+        updateJsonFile<string[]>(root, ledgerPath, [], (current) => {
           current.push(label);
           return current;
         })
       )
     );
 
-    const items = await readJsonFile<string[]>(ledgerPath, []);
+    const items = await readJsonFile<string[]>(root, ledgerPath, []);
     expect(items).toHaveLength(labels.length);
     for (const label of labels) {
       expect(items).toContain(label);
@@ -88,12 +88,12 @@ describe("tech-debt ledger", () => {
     // critical sections overlap, and an update is lost. Pre-fix this cleared the
     // empty lock and the update below would succeed.
     const file = path.join(root, "data", "state", "empty-lock.json");
-    await writeJsonFile(file, []);
+    await writeJsonFile(root, file, []);
     const lock = `${file}.lock`;
     await writeFile(lock, "");
 
     await expect(
-      updateJsonFile<string[]>(
+      updateJsonFile<string[]>(root, 
         file,
         [],
         (current) => [...current, "x"],

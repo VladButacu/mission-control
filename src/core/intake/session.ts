@@ -78,10 +78,10 @@ function withScope(session: IntakeSession, scope?: IntakeScope): IntakeSession {
 export async function readIntakeSessionFile(root: string, scope?: IntakeScope): Promise<IntakeSession | null> {
   await ensureHarnessRepository(root);
   const normalized = normalizeIntakeScope(scope);
-  const scoped = await readJsonFile<IntakeSession | null>(scopedIntakePath(root, normalized), null);
+  const scoped = await readJsonFile<IntakeSession | null>(root, scopedIntakePath(root, normalized), null);
   if (scoped) return withScope(scoped, normalized);
   if (normalized.kind === "global") {
-    const legacy = await readJsonFile<IntakeSession | null>(legacyIntakePath(root), null);
+    const legacy = await readJsonFile<IntakeSession | null>(root, legacyIntakePath(root), null);
     if (legacy) return withScope(legacy, normalized);
   }
   return null;
@@ -89,8 +89,8 @@ export async function readIntakeSessionFile(root: string, scope?: IntakeScope): 
 
 export async function writeIntakeSessionFile(root: string, session: IntakeSession): Promise<IntakeSession> {
   const scoped = withScope(session, session.scope);
-  await ensureDir(intakeSessionsDir(root));
-  await writeJsonFile(scopedIntakePath(root, scoped.scope), scoped);
+  await ensureDir(root, intakeSessionsDir(root));
+  await writeJsonFile(root, scopedIntakePath(root, scoped.scope), scoped);
   emitStateChange(["chrome", "intake"]);
   return scoped;
 }

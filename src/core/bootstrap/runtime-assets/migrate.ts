@@ -50,13 +50,13 @@ async function readRuntimeSkillBody(root: string, skillId: string): Promise<stri
 
 async function writeRuntimeWorkflow(root: string, workflowId: string, text: string): Promise<void> {
   const filePath = path.join(workflowsDir(root), `${workflowId}.yml`);
-  await ensureDir(path.dirname(filePath));
+  await ensureDir(root, path.dirname(filePath));
   await writeFile(filePath, text, "utf8");
 }
 
 async function writeRuntimeSkill(root: string, skillId: string, body: string): Promise<void> {
   const dir = path.join(root, "skills", skillId);
-  await ensureDir(dir);
+  await ensureDir(root, dir);
   await writeFile(path.join(dir, "SKILL.md"), body, "utf8");
 }
 

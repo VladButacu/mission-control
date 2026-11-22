@@ -185,7 +185,7 @@ export const proposalTools: McpToolModule = {
         if (!project) throw new Error(`Project not found: ${projectId}`);
         const { ensureDir } = await import("../../core/infra/fs.ts");
         const dir = projectDir(ctx.root, projectId);
-        await ensureDir(dir);
+        await ensureDir(ctx.root, dir);
         ledgerPath = path.join(dir, "tech-debt.json");
       }
 
@@ -211,7 +211,7 @@ export const proposalTools: McpToolModule = {
         ...(targets ? { targets } : {}),
         ...(projectId ? { projectId } : {})
       };
-      const items = await updateJsonFile<TechDebtItem[]>(ledgerPath, [], (current) => {
+      const items = await updateJsonFile<TechDebtItem[]>(ctx.root, ledgerPath, [], (current) => {
         current.push(item);
         return current;
       });

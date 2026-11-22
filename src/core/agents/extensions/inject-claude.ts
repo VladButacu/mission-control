@@ -30,7 +30,7 @@ export async function writeClaudeExtensionConfig(opts: {
   enabledIds: string[];
 }): Promise<ClaudeExtensionLaunch> {
   const claudeDir = path.join(opts.cwd, ".claude");
-  await ensureDir(claudeDir);
+  await ensureDir(opts.cwd, claudeDir);
   const enabledPlugins = buildClaudeEnabledPlugins(opts.allPlugins, opts.enabledIds);
   const settingsLocalPath = path.join(claudeDir, "settings.local.json");
   const payload: { enabledPlugins: Record<string, boolean> } = { enabledPlugins };

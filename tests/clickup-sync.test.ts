@@ -70,7 +70,7 @@ async function linkClickUpTask(
 }
 
 async function persistTask(root: string, task: HarnessTask, overrides: Partial<HarnessTask> = {}): Promise<void> {
-  await writeJsonFile(path.join(root, "data", "state", "tasks.json"), [{ ...task, ...overrides }]);
+  await writeJsonFile(root, path.join(root, "data", "state", "tasks.json"), [{ ...task, ...overrides }]);
 }
 
 function captureClickUpCalls(clickUpId: string, taskName: string): {

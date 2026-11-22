@@ -3,8 +3,11 @@ import path from "node:path";
 
 import { ensureDir } from "../core/infra/fs.ts";
 import { ensureHarnessRepository } from "../core/bootstrap/repository.ts";
+import { containedPath } from "../core/paths/contained.ts";
 import { listProjects, projectDir } from "../core/projects/registry.ts";
 import { rankSearchResults, tokenize } from "./search-utils.ts";
+
+const SLUG_OUTSIDE_PAGES = "Memory slug must stay inside the project's memory pages.";
 
 export interface MemoryPageInput {
   slug: string;
@@ -42,15 +45,17 @@ function pagesRoot(root: string, projectId: string): string {
   return path.join(projectDir(root, projectId), "memory", "pages");
 }
 
-function pagePath(root: string, projectId: string, slug: string): string {
-  return path.join(pagesRoot(root, projectId), `${normalizeSlug(slug)}.md`);
+/** Strips leading and trailing slashes in one linear pass (a `/\/+$/` regex is quadratic on long slash runs). */
+function trimSlashes(value: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end && value[start] === "/") start++;
+  while (end > start && value[end - 1] === "/") end--;
+  return value.slice(start, end);
 }
 
 export function normalizeSlug(slug: string): string {
-  const normalized = slug
-    .trim()
-    .replace(/\\/g, "/")
-    .replace(/^\/+|\/+$/g, "")
+  const normalized = trimSlashes(slug.trim().replace(/\\/g, "/"))
     .replace(/[^a-zA-Z0-9/_-]+/g, "-")
     .replace(/-+/g, "-")
     .toLowerCase();
@@ -122,18 +127,20 @@ function pageFromMarkdown(root: string, projectId: string, filePath: string, mar
   };
 }
 
-async function walkMarkdown(dir: string): Promise<string[]> {
+async function walkMarkdown(base: string, dir = base): Promise<string[]> {
+  const safeDir = containedPath(base, dir);
+  if (!safeDir) return [];
   let entries: Array<{ name: string; isDirectory(): boolean; isFile(): boolean }>;
   try {
-    entries = await readdir(dir, { withFileTypes: true });
+    entries = await readdir(safeDir, { withFileTypes: true });
   } catch {
     return [];
   }
   const files: string[] = [];
   for (const entry of entries) {
-    const fullPath = path.join(dir, entry.name);
+    const fullPath = path.join(safeDir, entry.name);
     if (entry.isDirectory()) {
-      files.push(...(await walkMarkdown(fullPath)));
+      files.push(...(await walkMarkdown(base, fullPath)));
     } else if (entry.isFile() && entry.name.endsWith(".md")) {
       files.push(fullPath);
     }
@@ -143,7 +150,8 @@ async function walkMarkdown(dir: string): Promise<string[]> {
 
 export async function captureMemoryPage(root: string, projectId: string, input: MemoryPageInput): Promise<MemoryPage> {
   await ensureHarnessRepository(root);
-  const filePath = pagePath(root, projectId, input.slug);
+  const filePath = containedPath(pagesRoot(root, projectId), `${normalizeSlug(input.slug)}.md`);
+  if (!filePath) throw new Error(SLUG_OUTSIDE_PAGES);
   await mkdir(path.dirname(filePath), { recursive: true });
   const markdown = serializePage(input);
   await writeFile(filePath, markdown, "utf8");
@@ -153,7 +161,7 @@ export async function captureMemoryPage(root: string, projectId: string, input: 
 export async function listMemoryPages(root: string, projectId: string): Promise<MemoryPageSummary[]> {
   await ensureHarnessRepository(root);
   const pagesDir = pagesRoot(root, projectId);
-  await ensureDir(pagesDir);
+  await ensureDir(root, pagesDir);
   const files = await walkMarkdown(pagesDir);
   const pages = await Promise.all(files.map((file) => readMemoryFile(root, projectId, file)));
   return pages
@@ -171,7 +179,8 @@ export async function listAllMemoryPages(root: string): Promise<MemoryPageSummar
 export async function getMemoryPage(root: string, projectId: string, slug: string): Promise<MemoryPage> {
   await ensureHarnessRepository(root);
   const normalized = normalizeSlug(slug);
-  const filePath = pagePath(root, projectId, normalized);
+  const filePath = containedPath(pagesRoot(root, projectId), `${normalized}.md`);
+  if (!filePath) throw new Error(SLUG_OUTSIDE_PAGES);
   try {
     return pageFromMarkdown(root, projectId, filePath, await readFile(filePath, "utf8"));
   } catch {
@@ -182,7 +191,8 @@ export async function getMemoryPage(root: string, projectId: string, slug: strin
 export async function deleteMemoryPage(root: string, projectId: string, slug: string): Promise<boolean> {
   await ensureHarnessRepository(root);
   const normalized = normalizeSlug(slug);
-  const filePath = pagePath(root, projectId, normalized);
+  const filePath = containedPath(pagesRoot(root, projectId), `${normalized}.md`);
+  if (!filePath) throw new Error(SLUG_OUTSIDE_PAGES);
   try {
     await unlink(filePath);
   } catch (error) {
@@ -216,5 +226,7 @@ export async function searchMemoryPages(
 }
 
 async function readMemoryFile(root: string, projectId: string, filePath: string): Promise<MemoryPage> {
-  return pageFromMarkdown(root, projectId, filePath, await readFile(filePath, "utf8"));
+  const safePath = containedPath(pagesRoot(root, projectId), filePath);
+  if (!safePath) throw new Error(SLUG_OUTSIDE_PAGES);
+  return pageFromMarkdown(root, projectId, safePath, await readFile(safePath, "utf8"));
 }

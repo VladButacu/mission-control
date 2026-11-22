@@ -12,7 +12,7 @@ export function emptyRuntimeAssetsManifest(): RuntimeAssetsManifest {
 }
 
 export async function readRuntimeAssetsManifest(root: string): Promise<RuntimeAssetsManifest> {
-  const stored = await readJsonFile<Partial<RuntimeAssetsManifest> | null>(
+  const stored = await readJsonFile<Partial<RuntimeAssetsManifest> | null>(root, 
     runtimeAssetsManifestPath(root),
     null
   );
@@ -34,5 +34,5 @@ export async function writeRuntimeAssetsManifest(
   root: string,
   manifest: RuntimeAssetsManifest
 ): Promise<void> {
-  await writeJsonFile(runtimeAssetsManifestPath(root), manifest);
+  await writeJsonFile(root, runtimeAssetsManifestPath(root), manifest);
 }

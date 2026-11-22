@@ -94,7 +94,7 @@ export function shouldCaptureOperationalError(input: OperationalErrorCapture): b
 }
 
 export async function listOperationalErrors(root: string): Promise<OperationalError[]> {
-  return readJsonFile<OperationalError[]>(operationalErrorsPath(root), []);
+  return readJsonFile<OperationalError[]>(root, operationalErrorsPath(root), []);
 }
 
 export async function listOpenOperationalErrors(root: string, limit = 12): Promise<OperationalError[]> {
@@ -132,7 +132,7 @@ export async function captureOperationalError(
     ...(input.workflowStep !== undefined ? { workflowStep: input.workflowStep } : {})
   };
 
-  await writeJsonFile(operationalErrorsPath(root), [entry, ...items].slice(0, MAX_LEDGER_ENTRIES));
+  await writeJsonFile(root, operationalErrorsPath(root), [entry, ...items].slice(0, MAX_LEDGER_ENTRIES));
   return entry;
 }
 
@@ -144,5 +144,5 @@ export async function markOperationalErrorsTriaged(root: string, ids: string[]):
   const next = items.map((item) =>
     idSet.has(item.id) ? { ...item, status: "triaged" as const, triagedAt } : item
   );
-  await writeJsonFile(operationalErrorsPath(root), next);
+  await writeJsonFile(root, operationalErrorsPath(root), next);
 }

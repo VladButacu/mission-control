@@ -234,7 +234,7 @@ export async function buildBaselineReport(input: BuildBaselineReportInput): Prom
   const { root, inventory, corpus, command = "baseline-report" } = input;
   const tasks =
     input.tasks ??
-    (await readJsonFile(path.join(root, "data", "state", "tasks.json"), []));
+    (await readJsonFile(root, path.join(root, "data", "state", "tasks.json"), []));
   const corpusReplay = await replayEvalCorpus(root, corpus);
   const hashes = await workflowHashes(root);
   const validCaseIds = corpus.cases
@@ -454,7 +454,8 @@ export async function writeBaselineReport(
 ): Promise<{ jsonPath: string; markdownPath: string }> {
   const { ensureDir } = await import("../infra/fs.ts");
   const { writeFile } = await import("node:fs/promises");
-  await ensureDir(outDir);
+  // shortcut: caller-chosen output dir has no containing root, self-rooted; pass a root when the CLI gains one.
+  await ensureDir(outDir, outDir);
   const jsonPath = path.join(outDir, `${report.baselineId}.json`);
   const markdownPath = path.join(outDir, `${report.baselineId}.md`);
   await writeFile(jsonPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");

@@ -7,6 +7,7 @@ import { emitStateChange, type StateScope } from "../infra/state-bus.ts";
 import { ensureHarnessRepository } from "../bootstrap/repository.ts";
 import { listProjects, projectDir } from "../projects/registry.ts";
 import { EntityNotFoundError } from "./errors.ts";
+import { isRunId } from "./run-id.ts";
 import type { HarnessRun } from "../types.ts";
 
 /**
@@ -35,15 +36,15 @@ function runStateScopes(taskId: string): StateScope[] {
 /** Runs for a single bucket: a project's runs, or the maintenance bucket when `projectId` is omitted. */
 export async function listRuns(root: string, projectId?: string): Promise<HarnessRun[]> {
   await ensureHarnessRepository(root);
-  return readJsonFile<HarnessRun[]>(runsPathFor(root, projectId), []);
+  return readJsonFile<HarnessRun[]>(root, runsPathFor(root, projectId), []);
 }
 
 /** Every run across the maintenance bucket and all onboarded projects. */
 export async function listAllRuns(root: string): Promise<HarnessRun[]> {
   const projects = await listProjects(root);
   const buckets = await Promise.all([
-    readJsonFile<HarnessRun[]>(runsPathFor(root), []),
-    ...projects.map((project) => readJsonFile<HarnessRun[]>(runsPathFor(root, project.id), []))
+    readJsonFile<HarnessRun[]>(root, runsPathFor(root), []),
+    ...projects.map((project) => readJsonFile<HarnessRun[]>(root, runsPathFor(root, project.id), []))
   ]);
   return buckets.flat();
 }
@@ -52,8 +53,8 @@ export async function createRun(root: string, input: Omit<HarnessRun, "id">): Pr
   await ensureHarnessRepository(root);
   const run: HarnessRun = { id: crypto.randomUUID(), ...input };
   const file = runsPathFor(root, run.projectId);
-  const runs = await readJsonFile<HarnessRun[]>(file, []);
-  await writeJsonFile(file, [run, ...runs]);
+  const runs = await readJsonFile<HarnessRun[]>(root, file, []);
+  await writeJsonFile(root, file, [run, ...runs]);
   emitStateChange(runStateScopes(run.taskId));
   return run;
 }
@@ -61,7 +62,7 @@ export async function createRun(root: string, input: Omit<HarnessRun, "id">): Pr
 export async function claimRunForTask(root: string, input: Omit<HarnessRun, "id">): Promise<HarnessRun | null> {
   await ensureHarnessRepository(root);
   const run: HarnessRun = { id: crypto.randomUUID(), ...input };
-  const persisted = await updateJsonFile<HarnessRun[]>(runsPathFor(root, run.projectId), [], (runs) => {
+  const persisted = await updateJsonFile<HarnessRun[]>(root, runsPathFor(root, run.projectId), [], (runs) => {
     if (runs.some((existing) => existing.taskId === input.taskId && existing.status === "running")) {
       return runs;
     }
@@ -83,7 +84,7 @@ export async function updateRun(root: string, runId: string, updates: Partial<Ha
     Object.entries(updates).filter(([, value]) => value !== undefined)
   ) as Partial<HarnessRun>;
   let updated: HarnessRun = located;
-  await updateJsonFile<HarnessRun[]>(runsPathFor(root, located.projectId), [], (runs) => {
+  await updateJsonFile<HarnessRun[]>(root, runsPathFor(root, located.projectId), [], (runs) => {
     const index = runs.findIndex((run) => run.id === runId);
     if (index === -1) return runs;
     updated = { ...runs[index]!, ...defined };
@@ -100,10 +101,10 @@ export async function cleanRuns(root: string, projectId?: string): Promise<{ del
   const runs = await listRuns(root, projectId);
   const kept = runs.filter((run) => run.status === "running");
   const deleted = runs.filter((run) => run.status !== "running");
-  await writeJsonFile(runsPathFor(root, projectId), kept);
+  await writeJsonFile(root, runsPathFor(root, projectId), kept);
   emitStateChange(["chrome", "runs"]);
   await Promise.all(
-    deleted.map((run) => rm(runDir(root, run.id), { recursive: true, force: true }))
+    deleted.filter((run) => isRunId(run.id)).map((run) => rm(runDir(root, run.id), { recursive: true, force: true }))
   );
   return { deleted: deleted.length };
 }

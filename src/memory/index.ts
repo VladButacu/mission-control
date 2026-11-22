@@ -4,9 +4,11 @@ import path from "node:path";
 import { readJsonFile, updateJsonFile, writeJsonFile } from "../core/infra/fs.ts";
 
 import { ensureHarnessRepository } from "../core/bootstrap/repository.ts";
+import { containedPath } from "../core/paths/contained.ts";
 import { projectDir } from "../core/projects/registry.ts";
 import { deriveExecution } from "../core/tasks/status.ts";
 import { listRuns } from "../core/tasks/runs.ts";
+import { isRunId } from "../core/tasks/run-id.ts";
 import { listTasks } from "../core/tasks/tasks.ts";
 import { getMemoryPage, listMemoryPages, normalizeSlug } from "./store.ts";
 import { rankSearchResults, tokenize } from "./search-utils.ts";
@@ -138,6 +140,7 @@ export async function buildMemoryIndex(
   }
 
   for (const run of runs) {
+    if (!isRunId(run.id)) continue;
     documents.push({
       id: `run:${run.id}`,
       sourceType: "run",
@@ -148,8 +151,11 @@ export async function buildMemoryIndex(
       updatedAt: run.completedAt ?? run.startedAt
     });
 
+    const runDir = path.join(root, "data", "runs", run.id);
+
     for (const artifact of run.artifacts) {
-      const artifactPath = path.join(root, "data", "runs", run.id, artifact);
+      const artifactPath = containedPath(runDir, artifact);
+      if (!artifactPath) continue;
       const file = await readTextFileIfIndexable(artifactPath);
       if (!file) continue;
       documents.push({
@@ -179,7 +185,7 @@ export async function buildMemoryIndex(
   }
 
   const index = { generatedAt: now(), documents };
-  await writeJsonFile(indexPath(root, projectId), index);
+  await writeJsonFile(root, indexPath(root, projectId), index);
   return index;
 }
 
@@ -191,7 +197,7 @@ export async function searchMemoryIndex(
   await ensureHarnessRepository(root);
   const terms = tokenize(query);
   if (!terms.length) return [];
-  const index = await readJsonFile<MemoryIndex>(indexPath(root, projectId), { generatedAt: "", documents: [] });
+  const index = await readJsonFile<MemoryIndex>(root, indexPath(root, projectId), { generatedAt: "", documents: [] });
   return rankSearchResults(index.documents, terms, {
     getHaystack: (document) => `${document.title} ${document.path} ${document.tags.join(" ")} ${document.content}`,
     getSnippetSource: (document) => document.content,
@@ -206,14 +212,15 @@ export async function searchMemoryIndex(
  */
 export async function removeMemoryDocument(root: string, projectId: string, slug: string): Promise<void> {
   await ensureHarnessRepository(root);
-  const file = indexPath(root, projectId);
+  const file = containedPath(root, indexPath(root, projectId));
+  if (!file) throw new Error("Memory index path must stay inside the harness root.");
   try {
     await stat(file);
   } catch {
     return;
   }
   const documentId = `memory:${normalizeSlug(slug)}`;
-  await updateJsonFile<MemoryIndex>(file, { generatedAt: "", documents: [] }, (index) => ({
+  await updateJsonFile<MemoryIndex>(root, file, { generatedAt: "", documents: [] }, (index) => ({
     ...index,
     documents: index.documents.filter((document) => document.id !== documentId)
   }));

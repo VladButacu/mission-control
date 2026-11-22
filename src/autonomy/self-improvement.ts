@@ -45,7 +45,7 @@ function formatAutonomyRunEntry(entry: unknown): string | null {
 }
 
 async function loadRecentAutonomyRunLines(root: string): Promise<string[]> {
-  const history = await readJsonFile<AutonomyRunResult[]>(autonomyRunsPath(root), []);
+  const history = await readJsonFile<AutonomyRunResult[]>(root, autonomyRunsPath(root), []);
   return history
     .slice(0, 5)
     .map(formatAutonomyRunEntry)

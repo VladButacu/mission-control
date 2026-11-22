@@ -18,10 +18,10 @@ export type { AutonomyJob, AutonomyJobStatus, AutonomyRunMode, AutonomyRunResult
 
 export async function listAutonomyJobs(root: string): Promise<AutonomyJob[]> {
   await ensureHarnessRepository(root);
-  const stored = await readJsonFile<AutonomyJob[]>(jobsPath(root), []);
+  const stored = await readJsonFile<AutonomyJob[]>(root, jobsPath(root), []);
   if (!stored.length) {
     const seeded = DEFAULT_JOBS.map(withDefaults);
-    await writeJsonFile(jobsPath(root), seeded);
+    await writeJsonFile(root, jobsPath(root), seeded);
     return seeded;
   }
   const byId = new Map(stored.map((job) => [job.id, withDefaults(job)] as const));
@@ -65,7 +65,7 @@ export async function listAutonomyJobs(root: string): Promise<AutonomyJob[]> {
   }
   const merged = [...byId.values()];
   if (changed) {
-    await writeJsonFile(jobsPath(root), merged);
+    await writeJsonFile(root, jobsPath(root), merged);
   }
   return merged;
 }
@@ -91,7 +91,7 @@ export async function setAutonomyJobRunMode(
   if (index === -1) throw new Error(`Autonomy job not found: ${jobId}`);
   const updated = { ...jobs[index]!, runMode };
   jobs[index] = updated;
-  await writeJsonFile(jobsPath(root), jobs);
+  await writeJsonFile(root, jobsPath(root), jobs);
   return updated;
 }
 
@@ -108,7 +108,7 @@ export async function setAutonomyJobStatus(
   if (index === -1) throw new Error(`Autonomy job not found: ${jobId}`);
   const updated = { ...jobs[index]!, status };
   jobs[index] = updated;
-  await writeJsonFile(jobsPath(root), jobs);
+  await writeJsonFile(root, jobsPath(root), jobs);
   return updated;
 }
 
@@ -160,9 +160,9 @@ async function updateJobRun(root: string, jobId: string, result: AutonomyRunResu
       ? { ...job, lastRunAt: now(), lastSummary: result.summary, nextRunAt: nextRunFor(job.schedule, now()) }
       : job
   );
-  await writeJsonFile(jobsPath(root), updated);
+  await writeJsonFile(root, jobsPath(root), updated);
 
-  const history = await readJsonFile<AutonomyRunResult[]>(autonomyRunsPath(root), []);
+  const history = await readJsonFile<AutonomyRunResult[]>(root, autonomyRunsPath(root), []);
   history.unshift({ ...result, jobId });
-  await writeJsonFile(autonomyRunsPath(root), history.slice(0, 200));
+  await writeJsonFile(root, autonomyRunsPath(root), history.slice(0, 200));
 }

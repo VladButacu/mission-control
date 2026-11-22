@@ -70,7 +70,7 @@ describe("project autonomy", () => {
   });
 
   it("anchors project tech-debt tasks to the project", async () => {
-    await writeJsonFile(path.join(projectDir(tmp, projectId), "tech-debt.json"), [
+    await writeJsonFile(tmp, path.join(projectDir(tmp, projectId), "tech-debt.json"), [
       {
         id: "td-1",
         title: "Fix project issue",
@@ -208,7 +208,7 @@ describe("project autonomy", () => {
     expect(result.summary).toMatch(/agent exploded/);
 
     // The run must still be recorded in the harness-wide history (previously skipped).
-    const history = await readJsonFile<AutonomyRunResult[]>(autonomyRunsPath(tmp), []);
+    const history = await readJsonFile<AutonomyRunResult[]>(tmp, autonomyRunsPath(tmp), []);
     expect(history[0]).toMatchObject({ status: "blocked" });
     expect(history[0]?.summary).toMatch(/agent exploded/);
   });

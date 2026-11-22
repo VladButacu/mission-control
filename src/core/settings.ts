@@ -87,14 +87,14 @@ function normalizeSettings(raw: Partial<HarnessSettings> | null | undefined): Ha
 
 export async function loadHarnessSettings(root: string): Promise<HarnessSettings> {
   await ensureHarnessRepository(root);
-  const stored = await readJsonFile<Partial<HarnessSettings> | null>(settingsPath(root), null);
+  const stored = await readJsonFile<Partial<HarnessSettings> | null>(root, settingsPath(root), null);
   if (!stored) return { ...DEFAULT_HARNESS_SETTINGS };
   return normalizeSettings(stored);
 }
 
 async function saveHarnessSettings(root: string, settings: HarnessSettings): Promise<HarnessSettings> {
   const normalized = normalizeSettings(settings);
-  await writeJsonFile(settingsPath(root), normalized);
+  await writeJsonFile(root, settingsPath(root), normalized);
   return normalized;
 }
 

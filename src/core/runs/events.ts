@@ -3,6 +3,7 @@ import { appendFile, readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { ensureDir } from "../infra/fs.ts";
+import { containedPath } from "../paths/contained.ts";
 import type { NormalizedUsage, UsageReportingMode } from "./usage-types.ts";
 
 /**
@@ -61,7 +62,11 @@ emitter.setMaxListeners(0);
 const seqCounters = new Map<string, number>();
 
 function runEventsPath(root: string, runId: string): string {
-  return path.join(root, "data", "runs", runId, "events.ndjson");
+  const runDir = containedPath(path.join(root, "data", "runs"), runId);
+  if (!runDir) {
+    throw new Error(`Run id escapes the runs directory: ${runId}`);
+  }
+  return path.join(runDir, "events.ndjson");
 }
 
 export async function readRunEvents(root: string, runId: string, since = 0): Promise<RunEvent[]> {
@@ -101,7 +106,7 @@ export async function appendRunEvent(root: string, runId: string, input: RunEven
   const seq = await nextSeq(root, runId);
   const { at, ...rest } = input;
   const event: RunEvent = { ...rest, seq, at: at ?? new Date().toISOString() };
-  await ensureDir(path.dirname(runEventsPath(root, runId)));
+  await ensureDir(root, path.dirname(runEventsPath(root, runId)));
   await appendFile(runEventsPath(root, runId), `${JSON.stringify(event)}\n`, "utf8");
   emitter.emit(runId, event);
   return event;

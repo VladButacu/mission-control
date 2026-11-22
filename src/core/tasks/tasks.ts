@@ -113,14 +113,14 @@ async function normalizeTasks(tasks: HarnessTask[], root: string): Promise<Harne
     return repaired.task;
   });
   if (changed) {
-    await writeJsonFile(tasksPath(root), normalized);
+    await writeJsonFile(root, tasksPath(root), normalized);
   }
   return normalized;
 }
 
 export async function listTasks(root: string): Promise<HarnessTask[]> {
   await ensureHarnessRepository(root);
-  const tasks = await readJsonFile<HarnessTask[]>(tasksPath(root), []);
+  const tasks = await readJsonFile<HarnessTask[]>(root, tasksPath(root), []);
   return normalizeTasks(tasks, root);
 }
 
@@ -181,7 +181,7 @@ export async function createTask(root: string, input: CreateTaskInput): Promise<
     throw new Error("Task title and description are required.");
   }
 
-  await writeJsonFile(tasksPath(root), [task, ...tasks]);
+  await writeJsonFile(root, tasksPath(root), [task, ...tasks]);
   emitStateChange(taskScopes(task.id));
   void captureProjectContextFromTask(root, task).catch(() => {});
   return task;
@@ -897,7 +897,7 @@ export async function deleteTask(root: string, taskId: string): Promise<HarnessT
     throw new EntityNotFoundError("task", taskId);
   }
   const [deleted] = tasks.splice(index, 1);
-  await writeJsonFile(tasksPath(root), tasks);
+  await writeJsonFile(root, tasksPath(root), tasks);
   emitStateChange(["chrome", "tasks"]);
   return deleted!;
 }
@@ -906,7 +906,7 @@ export async function deleteTasks(root: string, taskIds: string[]): Promise<{ de
   const ids = new Set(taskIds);
   const tasks = await listTasks(root);
   const remaining = tasks.filter((task) => !ids.has(task.id));
-  await writeJsonFile(tasksPath(root), remaining);
+  await writeJsonFile(root, tasksPath(root), remaining);
   emitStateChange(["chrome", "tasks"]);
   return { deleted: tasks.length - remaining.length };
 }
@@ -972,7 +972,7 @@ export async function repointProjectTasks(
   });
 
   if (changed) {
-    await writeJsonFile(tasksPath(root), next);
+    await writeJsonFile(root, tasksPath(root), next);
     emitStateChange(changedScopes);
   }
 }
@@ -990,7 +990,7 @@ export async function updateTask(
   }
   const updated = updater(tasks[index]!);
   tasks[index] = updated;
-  await writeJsonFile(tasksPath(root), tasks);
+  await writeJsonFile(root, tasksPath(root), tasks);
   if (!options?.silent) {
     emitStateChange(options?.scopes ?? taskScopes(taskId));
   }
@@ -1017,6 +1017,6 @@ export async function updateTaskActivity(
     ...(nextProgress !== undefined ? { lastProgressAt: nextProgress } : {}),
     updatedAt: now()
   };
-  await writeJsonFile(tasksPath(root), tasks);
+  await writeJsonFile(root, tasksPath(root), tasks);
   emitStateChange([taskActivityScope(taskId)]);
 }

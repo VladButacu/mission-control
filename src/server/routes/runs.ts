@@ -2,26 +2,31 @@ import path from "node:path";
 import { Router } from "express";
 
 import { cleanRuns, listAllRuns } from "../../core/tasks/runs.ts";
+import { parseRunId } from "../../core/tasks/run-id.ts";
 import { readRunEvents, subscribeRunEvents } from "../../core/runs/events.ts";
 import { inspectRunRoutingDecision } from "../../core/runs/routing-inspect.ts";
+import { containedPath } from "../../core/paths/contained.ts";
 import { deliverOperatorMessageToLiveTurn } from "../../runtime/sessions.ts";
 import { asyncRoute, param, type ServerOptions } from "./helpers.ts";
 import { stopRun } from "./run-control.ts";
+import { createRouteRateLimiter } from "../rate-limit.ts";
 
 export function createRunsRouter(options: ServerOptions): Router {
   const router = Router();
+  const tailLimiter = createRouteRateLimiter(600);
+  const artifactLimiter = createRouteRateLimiter(60);
 
   router.post(
     "/runs/:runId/kill",
     asyncRoute(async (req, res) => {
-      res.json(await stopRun(options.root, param(req.params["runId"], "runId")));
+      res.json(await stopRun(options.root, parseRunId(param(req.params["runId"], "runId"))));
     })
   );
 
   router.post(
     "/runs/:runId/input",
     asyncRoute(async (req, res) => {
-      const runId = param(req.params["runId"], "runId");
+      const runId = parseRunId(param(req.params["runId"], "runId"));
       const text = ((req.body as { text?: string }).text ?? "").trim();
       if (!text) {
         res.status(400).json({ error: "text is required." });
@@ -44,7 +49,7 @@ export function createRunsRouter(options: ServerOptions): Router {
   router.post(
     "/runs/:runId/cancel",
     asyncRoute(async (req, res) => {
-      res.json(await stopRun(options.root, param(req.params["runId"], "runId")));
+      res.json(await stopRun(options.root, parseRunId(param(req.params["runId"], "runId"))));
     })
   );
 
@@ -59,7 +64,7 @@ export function createRunsRouter(options: ServerOptions): Router {
   router.get(
     "/runs/:runId/events",
     asyncRoute(async (req, res) => {
-      const runId = param(req.params["runId"], "runId");
+      const runId = parseRunId(param(req.params["runId"], "runId"));
       const since = Math.max(0, Number((req.query["since"] as string) ?? 0) || 0);
 
       res.setHeader("Content-Type", "text/event-stream");
@@ -90,10 +95,15 @@ export function createRunsRouter(options: ServerOptions): Router {
 
   router.get(
     "/runs/:runId/tail",
+    tailLimiter,
     asyncRoute(async (req, res) => {
-      const runId = param(req.params["runId"], "runId");
+      const runId = parseRunId(param(req.params["runId"], "runId"));
       const since = Math.max(0, Number((req.query["since"] as string) ?? 0) || 0);
-      const logFile = path.join(options.root, "data", "runs", runId, "log.txt");
+      const logFile = containedPath(path.join(options.root, "data", "runs"), path.join(runId, "log.txt"));
+      if (!logFile) {
+        res.status(400).json({ error: "runId must stay inside the runs directory." });
+        return;
+      }
       try {
         const { open, stat } = await import("node:fs/promises");
         const info = await stat(logFile);
@@ -124,7 +134,7 @@ export function createRunsRouter(options: ServerOptions): Router {
   router.get(
     "/runs/:runId/routing",
     asyncRoute(async (req, res) => {
-      const view = await inspectRunRoutingDecision(options.root, param(req.params["runId"], "runId"));
+      const view = await inspectRunRoutingDecision(options.root, parseRunId(param(req.params["runId"], "runId")));
       if (!view) {
         res.status(404).json({ error: "Run routing not found." });
         return;
@@ -135,16 +145,17 @@ export function createRunsRouter(options: ServerOptions): Router {
 
   router.get(
     "/runs/:runId/artifacts/:fileName",
+    artifactLimiter,
     asyncRoute(async (req, res) => {
-      res.sendFile(
-        path.join(
-          options.root,
-          "data",
-          "runs",
-          param(req.params["runId"], "runId"),
-          param(req.params["fileName"], "fileName")
-        )
+      const artifact = containedPath(
+        path.join(options.root, "data", "runs"),
+        path.join(parseRunId(param(req.params["runId"], "runId")), param(req.params["fileName"], "fileName"))
       );
+      if (!artifact) {
+        res.status(400).json({ error: "Artifact must stay inside the runs directory." });
+        return;
+      }
+      res.sendFile(artifact);
     })
   );
 

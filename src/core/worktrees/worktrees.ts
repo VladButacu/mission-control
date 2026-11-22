@@ -197,7 +197,7 @@ async function branchExists(repoPath: string, branch: string): Promise<boolean> 
  */
 async function prepareScratchWorkspace(task: HarnessTask, harnessRoot: string): Promise<PreparedWorkspace> {
   const scratch = path.join(harnessRoot, "data", "state", "scratch", shortId(task.id));
-  await ensureDir(scratch);
+  await ensureDir(harnessRoot, scratch);
   return { cwd: scratch, isRepo: false, created: false };
 }
 
@@ -216,7 +216,7 @@ async function prepareProjectContextWorkspace(
     return prepareScratchWorkspace(task, harnessRoot);
   }
 
-  await ensureDir(targetDir);
+  await ensureDir(targetDir, targetDir);
   const repoPath = await gitTopLevel(targetDir);
   if (!repoPath) {
     return { cwd: targetDir, isRepo: false, created: false };
@@ -268,7 +268,7 @@ export async function prepareWorkspace(
 
   const repoPath = await gitTopLevel(targetDir);
   if (!repoPath) {
-    await ensureDir(targetDir);
+    await ensureDir(targetDir, targetDir);
     return { cwd: targetDir, isRepo: false, created: false };
   }
 
@@ -327,7 +327,7 @@ export async function prepareStepWorkspace(
 
   const repoPath = await gitTopLevel(targetDir);
   if (!repoPath) {
-    await ensureDir(targetDir);
+    await ensureDir(targetDir, targetDir);
     return { cwd: targetDir, isRepo: false, created: false };
   }
 

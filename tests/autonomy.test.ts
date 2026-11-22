@@ -175,7 +175,7 @@ describe("autonomy jobs", () => {
   });
 
   it("refreshes stale autonomy job descriptions from code defaults", async () => {
-    await writeJsonFile(path.join(root, "data", "state", "autonomy-jobs.json"), [
+    await writeJsonFile(root, path.join(root, "data", "state", "autonomy-jobs.json"), [
       {
         id: "worktree-cleanup-sweep",
         title: "Worktree cleanup sweep",
@@ -195,7 +195,7 @@ describe("autonomy jobs", () => {
   });
 
   it("migrates stored ClickUp sync job config while preserving operator-set status", async () => {
-    await writeJsonFile(path.join(root, "data", "state", "autonomy-jobs.json"), [
+    await writeJsonFile(root, path.join(root, "data", "state", "autonomy-jobs.json"), [
       {
         id: "clickup-ticket-sync",
         title: "ClickUp ticket sync",

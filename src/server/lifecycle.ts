@@ -5,10 +5,10 @@ import { abortAllInflightTurns, listInflightTaskIds } from "../runtime/sessions.
 
 /**
  * Graceful shutdown for the Mission Control server. Exactly one shutdown path
- * is wired to both the process signal handlers (Ctrl+C) and the /api/shutdown
- * route (UI button + `mission-control stop`), so every entry point tears down
- * the same way: stop launching new turns, terminate every running agent child
- * process, then close the HTTP server.
+ * is wired to the process signal handlers (Ctrl+C, and SIGTERM from
+ * `mission-control stop`), so every entry point tears down the same way: stop
+ * launching new turns, terminate every running agent child process, then close
+ * the HTTP server.
  */
 
 export interface ShutdownTarget {
@@ -43,12 +43,6 @@ export function setShutdownTarget(next: ShutdownTarget): void {
   target = next;
 }
 
-/** True once shutdown has begun. The /api/shutdown route re-entrance check and
- * the UI both read this to avoid duplicate requests. */
-export function isShuttingDown(): boolean {
-  return shuttingDown;
-}
-
 /** Reset module state. Production code never calls this; tests use it to isolate cases. */
 export function resetShutdownState(): void {
   if (forceExitTimer) {
@@ -71,12 +65,9 @@ export interface ShutdownResult {
 /**
  * Synchronously claim shutdown. Returns true if this caller is the first to
  * request it (and so should drive the teardown), false if shutdown is already
- * in progress. The /api/shutdown route claims synchronously so concurrent
- * requests (UI + CLI, or two CLI calls) collapse into a single teardown instead
- * of the second one hitting the force-exit branch below. Every entry point
- * shares one teardown; only the repeat-handling differs (see gracefulShutdown).
+ * in progress.
  */
-export function beginShutdown(reason: string): boolean {
+function beginShutdown(reason: string): boolean {
   if (shuttingDown) return false;
   shuttingDown = true;
   console.log(`Shutting down Mission Control (${reason})…`);
@@ -89,7 +80,7 @@ export function beginShutdown(reason: string): boolean {
  * Callers must have already claimed via beginShutdown; the escalating signal
  * path uses gracefulShutdown instead.
  */
-export async function runShutdownTeardown(): Promise<ShutdownResult> {
+async function runShutdownTeardown(): Promise<ShutdownResult> {
   const terminated = listInflightTaskIds().length;
   if (terminated > 0) {
     console.log(`Terminating ${terminated} running agent process(es)…`);
@@ -135,9 +126,7 @@ export async function runShutdownTeardown(): Promise<ShutdownResult> {
 /**
  * Escalating shutdown for repeated OS signals (Ctrl+C): the first call claims
  * and tears down gracefully; a second call skips the grace period and exits now
- * so a repeated Ctrl+C always wins. The /api/shutdown route must NOT use this,
- * since a duplicate API request is a no-op (beginShutdown + runShutdownTeardown)
- * rather than an escalation.
+ * so a repeated Ctrl+C always wins.
  */
 export async function gracefulShutdown(reason: string): Promise<ShutdownResult> {
   if (!beginShutdown(reason)) {

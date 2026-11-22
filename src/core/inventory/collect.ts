@@ -43,7 +43,7 @@ function tasksPath(root: string): string {
 }
 
 async function readAgentConfig(root: string): Promise<AgentConfigBundle | null> {
-  const stored = await readJsonFile<Partial<AgentConfigBundle> | null>(agentConfigPath(root), null);
+  const stored = await readJsonFile<Partial<AgentConfigBundle> | null>(root, agentConfigPath(root), null);
   if (!stored || !Array.isArray(stored.tools) || stored.tools.length === 0) return null;
   try {
     return normalizeBundle(stored);
@@ -86,7 +86,7 @@ function detectToolModelOwnershipMismatchesFromRaw(
 }
 
 async function readSettings(root: string): Promise<HarnessSettings> {
-  const stored = await readJsonFile<Partial<HarnessSettings> | null>(settingsPath(root), null);
+  const stored = await readJsonFile<Partial<HarnessSettings> | null>(root, settingsPath(root), null);
   if (!stored) return { ...DEFAULT_HARNESS_SETTINGS };
   return {
     defaultAgent:
@@ -201,19 +201,19 @@ export async function collectRuntimeInventory(root: string) {
   const workflows = workflowInventory.workflows;
   const referencedSkills = collectReferencedSkills(workflows);
   const { skills, contradictorySkillBodies } = await inventorySkills(root, referencedSkills);
-  const rawAgentConfig = await readJsonFile<Partial<AgentConfigBundle> | null>(agentConfigPath(root), null);
+  const rawAgentConfig = await readJsonFile<Partial<AgentConfigBundle> | null>(root, agentConfigPath(root), null);
   const bundle = await readAgentConfig(root);
   const settings = await readSettings(root);
-  const stageOverrides = await readJsonFile<{ overrides?: Record<string, string>; ambiguousLegacy?: Record<string, string> }>(
+  const stageOverrides = await readJsonFile<{ overrides?: Record<string, string>; ambiguousLegacy?: Record<string, string> }>(root, 
     stageAgentsPath(root),
     { overrides: {} }
   );
   const stageModelPoolOverrides = await readJsonFile<{
     overrides?: Record<string, string>;
     ambiguousLegacy?: Record<string, string>;
-  }>(path.join(root, "data", "state", "stage-model-pools.json"), { overrides: {} });
-  const usageSnapshots = await readJsonFile(usageSnapshotsPath(root), emptyUsageSnapshots());
-  const tasks = await readJsonFile<HarnessTask[]>(tasksPath(root), []);
+  }>(root, path.join(root, "data", "state", "stage-model-pools.json"), { overrides: {} });
+  const usageSnapshots = await readJsonFile(root, usageSnapshotsPath(root), emptyUsageSnapshots());
+  const tasks = await readJsonFile<HarnessTask[]>(root, tasksPath(root), []);
   const runs = await listAllRuns(root);
 
   const missingPackaging = missingSkillPackaging(referencedSkills, skills);
@@ -309,6 +309,7 @@ export async function writeInventorySnapshot(
   const { ensureDir } = await import("../infra/fs.ts");
   const { dirname } = await import("node:path");
   const { writeFile } = await import("node:fs/promises");
-  await ensureDir(dirname(outPath));
+  // shortcut: caller-chosen output path has no containing root, self-rooted; pass a root when callers gain one.
+  await ensureDir(dirname(outPath), dirname(outPath));
   await writeFile(outPath, `${JSON.stringify(inventory, null, 2)}\n`, "utf8");
 }

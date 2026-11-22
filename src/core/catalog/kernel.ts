@@ -20,7 +20,7 @@ async function readIfPresent(filePath: string): Promise<string> {
  */
 export async function loadKernelText(root: string): Promise<string> {
   const dir = path.join(root, "kernel");
-  const names = (await listFileNames(dir)).filter((name) => name.endsWith(".md")).sort();
+  const names = (await listFileNames(root, dir)).filter((name) => name.endsWith(".md")).sort();
   const parts = await Promise.all(
     names.map(async (name) => {
       const content = (await readIfPresent(path.join(dir, name))).trim();
@@ -38,7 +38,7 @@ export async function loadKernelText(root: string): Promise<string> {
  */
 export async function loadSkillsIndex(root: string): Promise<string> {
   const dir = path.join(root, "skills");
-  const names = (await listFileNames(dir)).sort();
+  const names = (await listFileNames(root, dir)).sort();
   const entries: string[] = [];
   for (const name of names) {
     if (name === "README.md") continue;

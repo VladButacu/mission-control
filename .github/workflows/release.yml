@@ -44,7 +44,7 @@ jobs:
           cache: npm
           registry-url: https://registry.npmjs.org
       - run: npm ci
-      - run: npm install -g npm@11
+      - run: npm install -g npm@11.21.3
 
       - name: Version Packages PR or publish
         id: version

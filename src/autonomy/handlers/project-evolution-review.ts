@@ -22,7 +22,7 @@ export async function runProjectEvolutionReview(
   if (!project) throw new Error("Missing project context.");
 
   const reviewedPath = path.join(projectDir(root, project.id), "evolution-reviewed.json");
-  const reviewed = await readJsonFile<ReviewedEntry[]>(reviewedPath, []);
+  const reviewed = await readJsonFile<ReviewedEntry[]>(root, reviewedPath, []);
   const reviewedIds = new Set(reviewed.map((e) => e.runId));
 
   const allRuns = await listRuns(root, project.id);
@@ -82,7 +82,7 @@ End with a short summary: how many runs reviewed, which patterns found, which de
     buildPrompt: (_context: string) => prompt,
     afterTurn: async () => {
       const entries: ReviewedEntry[] = projectRuns.map((r) => ({ runId: r.id, reviewedAt: now() }));
-      await writeJsonFile(reviewedPath, [...reviewed, ...entries]);
+      await writeJsonFile(root, reviewedPath, [...reviewed, ...entries]);
     }
   };
 

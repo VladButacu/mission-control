@@ -15,7 +15,7 @@ export async function writeCursorExtensionConfig(opts: {
 
   const enabled = new Set(opts.enabledIds);
   const dir = path.join(opts.cwd, ".cursor");
-  await ensureDir(dir);
+  await ensureDir(opts.cwd, dir);
   const manifestPath = path.join(dir, "mission-control-extensions.json");
   await writeFile(
     manifestPath,

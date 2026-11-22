@@ -33,7 +33,6 @@ const STATUS_FILE = env.MC_UPDATE_STATUS_FILE;
 const FROM_VERSION = env.MC_UPDATE_FROM_VERSION ? env.MC_UPDATE_FROM_VERSION : null;
 const PARENT_PID = Number(env.MC_UPDATE_PARENT_PID);
 const PORT = env.MC_UPDATE_PORT ? env.MC_UPDATE_PORT : "";
-const HOST = env.MC_UPDATE_HOST ? env.MC_UPDATE_HOST : "";
 
 const logFile = HARNESS_ROOT ? path.join(HARNESS_ROOT, ".mission-control", "update-relaunch.log") : null;
 
@@ -188,7 +187,6 @@ async function main() {
   const childEnv = { ...env, HARNESS_PACKAGE_ROOT: launchRoot };
   if (HARNESS_ROOT) childEnv.HARNESS_ROOT = HARNESS_ROOT;
   if (PORT) childEnv.PORT = PORT;
-  if (HOST) childEnv.HARNESS_HOST = HOST;
 
   let stdio = "ignore";
   let logFd = -1;

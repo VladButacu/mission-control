@@ -23,13 +23,19 @@ describe("core fs helpers", () => {
   });
 
   it("readJsonFile returns fallback when the file is missing", async () => {
-    const value = await readJsonFile(path.join(root, "missing.json"), { ok: true });
+    const value = await readJsonFile(root, path.join(root, "missing.json"), { ok: true });
     expect(value).toEqual({ ok: true });
+  });
+
+  it("refuses to read or write a path that resolves outside its containing root", async () => {
+    const outside = path.join(root, "..", `${path.basename(root)}-escape.json`);
+    await expect(readJsonFile(root, outside, {})).rejects.toThrow(/must stay inside/);
+    await expect(writeJsonFile(root, outside, { escaped: true })).rejects.toThrow(/must stay inside/);
   });
 
   it("writeJsonFile round-trips structured data", async () => {
     const filePath = path.join(root, "nested", "data.json");
-    await writeJsonFile(filePath, { count: 2, tags: ["a"] });
+    await writeJsonFile(root, filePath, { count: 2, tags: ["a"] });
     const raw = await readFile(filePath, "utf8");
     expect(JSON.parse(raw)).toEqual({ count: 2, tags: ["a"] });
   });
@@ -37,13 +43,13 @@ describe("core fs helpers", () => {
   it("writeFileIfMissing preserves an existing file", async () => {
     const filePath = path.join(root, "seed.txt");
     await writeFile(filePath, "original", "utf8");
-    await writeFileIfMissing(filePath, "replacement");
+    await writeFileIfMissing(root, filePath, "replacement");
     expect(await readFile(filePath, "utf8")).toBe("original");
   });
 
   it("writeFileIfMissing creates a missing file", async () => {
     const filePath = path.join(root, "new.txt");
-    await writeFileIfMissing(filePath, "created");
+    await writeFileIfMissing(root, filePath, "created");
     expect(await readFile(filePath, "utf8")).toBe("created");
   });
 
@@ -59,7 +65,7 @@ describe("core fs helpers", () => {
   });
 
   it("listFileNames returns an empty array for a missing directory", async () => {
-    expect(await listFileNames(path.join(root, "missing-dir"))).toEqual([]);
+    expect(await listFileNames(root, path.join(root, "missing-dir"))).toEqual([]);
   });
 });
 

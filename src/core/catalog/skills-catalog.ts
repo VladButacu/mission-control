@@ -2,6 +2,7 @@ import { readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { listFileNames } from "../infra/fs.ts";
+import { containedPath } from "../paths/contained.ts";
 import { resolveSkillCategory, type SkillCategoryId } from "./skill-categories.ts";
 
 const SKILL_NAME_PATTERN = /^[a-z][a-z0-9-]*$/;
@@ -10,6 +11,16 @@ function assertValidSkillName(name: string): void {
   if (!SKILL_NAME_PATTERN.test(name)) {
     throw new Error("Invalid skill name.");
   }
+}
+
+/** SKILL.md path for a validated skill name, contained under `<root>/skills`. */
+function skillFilePath(root: string, name: string): string {
+  assertValidSkillName(name);
+  const file = containedPath(path.join(root, "skills"), path.join(name, "SKILL.md"));
+  if (!file) {
+    throw new Error("Invalid skill name.");
+  }
+  return file;
 }
 
 function parseSkillDescription(body: string): string {
@@ -27,7 +38,7 @@ export interface SkillSummaryWithCategory extends SkillSummary {
 
 export async function listSkills(root: string): Promise<SkillSummary[]> {
   const dir = path.join(root, "skills");
-  const names = (await listFileNames(dir)).sort();
+  const names = (await listFileNames(root, dir)).sort();
   const out: SkillSummary[] = [];
   for (const skillName of names) {
     if (skillName === "README.md") continue;
@@ -61,8 +72,7 @@ export async function listSkillsWithCategories(root: string): Promise<SkillSumma
 }
 
 export async function readSkill(root: string, name: string): Promise<{ name: string; content: string }> {
-  assertValidSkillName(name);
-  const content = await readFile(path.join(root, "skills", name, "SKILL.md"), "utf8");
+  const content = await readFile(skillFilePath(root, name), "utf8");
   return { name, content };
 }
 
@@ -86,8 +96,7 @@ export async function writeSkill(
   name: string,
   content: string
 ): Promise<{ name: string; content: string }> {
-  assertValidSkillName(name);
-  const file = path.join(root, "skills", name, "SKILL.md");
+  const file = skillFilePath(root, name);
   // Reading first guarantees the skill exists (ENOENT → caller maps to 404)
   // and gives us the frontmatter to preserve on body-only edits.
   const existing = await readFile(file, "utf8");

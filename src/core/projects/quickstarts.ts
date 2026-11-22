@@ -80,7 +80,7 @@ function quickstartsPath(root: string, projectId: string): string {
 
 /** The stored tailored set, or the defaults when nothing has been generated. */
 export async function readProjectQuickstarts(root: string, projectId: string): Promise<QuickstartsFile> {
-  const stored = await readJsonFile<QuickstartsFile | null>(quickstartsPath(root, projectId), null);
+  const stored = await readJsonFile<QuickstartsFile | null>(root, quickstartsPath(root, projectId), null);
   if (stored && Array.isArray(stored.quickstarts) && stored.quickstarts.length >= QUICKSTART_MIN) {
     return stored;
   }
@@ -88,8 +88,8 @@ export async function readProjectQuickstarts(root: string, projectId: string): P
 }
 
 async function writeQuickstarts(root: string, projectId: string, file: QuickstartsFile): Promise<void> {
-  await ensureDir(projectDir(root, projectId));
-  await writeJsonFile(quickstartsPath(root, projectId), file);
+  await ensureDir(root, projectDir(root, projectId));
+  await writeJsonFile(root, quickstartsPath(root, projectId), file);
   emitStateChange(["chrome"]);
 }
 

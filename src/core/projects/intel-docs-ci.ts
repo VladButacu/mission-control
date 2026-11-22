@@ -73,7 +73,7 @@ function extractDocCommands(text: string): string[] {
  */
 async function collectDocCandidatePaths(repoPath: string): Promise<string[]> {
   const found = new Set<string>();
-  const rootEntries = await listFileNames(repoPath);
+  const rootEntries = await listFileNames(repoPath, repoPath);
   for (const name of rootEntries) {
     if (DOC_GLOB.test(name)) found.add(name);
   }
@@ -97,7 +97,7 @@ export async function collectDocCommands(repoPath: string): Promise<DocExcerpt[]
   const excerpts: DocExcerpt[] = [];
 
   for (const relPath of candidates) {
-    const text = await readTextFile(path.join(repoPath, relPath));
+    const text = await readTextFile(repoPath, path.join(repoPath, relPath));
     if (text === null) continue;
     const commands = extractDocCommands(text).slice(0, 8);
     if (commands.length) excerpts.push({ path: relPath, commands });
@@ -121,7 +121,7 @@ export function inferCategoryFromToken(command: string): GateCategory {
 /** Collect `run:` steps from GitHub Actions workflows as evidence-backed commands. */
 export async function collectCiCommands(repoPath: string): Promise<DetectedCommand[]> {
   const workflowsDir = path.join(repoPath, ".github", "workflows");
-  if (!(await pathExists(workflowsDir))) return [];
+  if (!(await pathExists(repoPath, workflowsDir))) return [];
 
   let files: string[];
   try {
@@ -148,7 +148,7 @@ export async function collectCiCommands(repoPath: string): Promise<DetectedComma
   };
 
   for (const rel of files.sort()) {
-    const text = await readTextFile(path.join(workflowsDir, rel));
+    const text = await readTextFile(repoPath, path.join(workflowsDir, rel));
     if (text === null) continue;
     const lines = text.split("\n");
     for (let i = 0; i < lines.length; i++) {

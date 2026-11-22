@@ -6,6 +6,7 @@ import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import { DEFAULT_SKILLS } from "../defaults/skills.ts";
 import { hashBody } from "../../inventory/hash.ts";
 import { bundledSkillsDir } from "../../inventory/paths.ts";
+import { containedPath } from "../../paths/contained.ts";
 import { bundledWorkflowsDir } from "../../workflows/paths.ts";
 import {
   BUNDLED_WORKFLOW_IDS,
@@ -23,7 +24,11 @@ export async function workflowBundledHash(text: string): Promise<string> {
 }
 
 export async function readBundledWorkflowText(workflowId: string): Promise<string> {
-  return readFile(path.join(bundledWorkflowsDir(), `${workflowId}.yml`), "utf8");
+  const file = containedPath(bundledWorkflowsDir(), `${workflowId}.yml`);
+  if (!file) {
+    throw new Error(`Invalid workflow id: ${workflowId}`);
+  }
+  return readFile(file, "utf8");
 }
 
 export async function readBundledWorkflowHash(workflowId: string): Promise<string> {
@@ -52,7 +57,8 @@ export async function readBundledSkillBody(skillId: string): Promise<string | nu
   const seeded = DEFAULT_SKILLS[`${skillId}/SKILL.md`];
   if (seeded) return seeded;
 
-  const packagedPath = path.join(bundledSkillsDir(), skillId, "SKILL.md");
+  const packagedPath = containedPath(bundledSkillsDir(), path.join(skillId, "SKILL.md"));
+  if (!packagedPath) return null;
   try {
     return await readFile(packagedPath, "utf8");
   } catch {
