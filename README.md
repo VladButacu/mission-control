@@ -149,6 +149,8 @@ kernel/           # Seeded policy documents
 tests/            # Unit and integration tests
 ```
 
+The HTTP routes and MCP tools are listed in [`docs/reference.md`](./docs/reference.md).
+
 The main loop is:
 
 1. A project-scoped ticket is created from intake or a quickstart.
