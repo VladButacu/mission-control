@@ -1,5 +1,7 @@
 # Mission Control
 
+[![npm version](https://img.shields.io/npm/v/@vladbutacu/mission-control)](https://www.npmjs.com/package/@vladbutacu/mission-control) [![CI](https://github.com/vladbutacu/mission-control/actions/workflows/ci.yml/badge.svg)](https://github.com/vladbutacu/mission-control/actions/workflows/ci.yml) [![CodeQL](https://github.com/vladbutacu/mission-control/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/vladbutacu/mission-control/actions/workflows/github-code-scanning/codeql) [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/vladbutacu/mission-control/badge)](https://scorecard.dev/viewer/?uri=github.com/vladbutacu/mission-control) [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
+
 Mission Control is a local-first control panel for running AI coding agents against your own repositories. It turns a request into a scoped ticket, routes that ticket through a workflow, keeps local project memory, and can hand completed work to PR or MR creation when you connect a Git provider.
 
 For plan and authoring steps, you do not just watch a log: Mission Control opens the **real agent TUI** (Claude, Codex, and friends) inside the ticket. You see the same session the harness started, type into it when you need to, and mark the step **Done** when the work is finished. Automation steps (review, remediation, and similar) stay headless so the daemon can keep driving without a human at the keyboard.
