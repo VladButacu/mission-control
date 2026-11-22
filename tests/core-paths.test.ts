@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -25,6 +25,41 @@ describe("containedPath", () => {
   it("resolves dot segments before checking containment", () => {
     expect(containedPath(root, path.join("app", "..", "index.html"))).toBe(path.join(root, "index.html"));
     expect(containedPath(path.parse(root).root, "etc")).toBe(path.join(path.parse(root).root, "etc"));
+  });
+});
+
+describe("containedPath follows symlinks", () => {
+  let root: string;
+  let outside: string;
+
+  beforeEach(async () => {
+    root = await mkdtemp(path.join(tmpdir(), "harness-contained-"));
+    outside = await mkdtemp(path.join(tmpdir(), "harness-outside-"));
+    await ensureHarnessRepository(root);
+    await symlink(outside, path.join(root, "escape"), "dir");
+  });
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+    await rm(outside, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+  });
+
+  it("refuses a symlink inside the root that points outside it", () => {
+    expect(containedPath(root, "escape")).toBeUndefined();
+  });
+
+  it("refuses a file that does not exist yet under a symlinked directory pointing outside", () => {
+    expect(containedPath(root, path.join("escape", "new.txt"))).toBeUndefined();
+  });
+
+  it("returns the lexical path for a nested file that does not exist yet under the root", () => {
+    expect(containedPath(root, path.join("a", "b", "c.txt"))).toBe(path.join(root, "a", "b", "c.txt"));
+  });
+
+  it("still contains the children of a root that sits behind a symlinked prefix", () => {
+    // On macOS, tmpdir() is under /var, which is a symlink to /private/var.
+    expect(containedPath(root, root)).toBe(root);
+    expect(containedPath(root, "child.txt")).toBe(path.join(root, "child.txt"));
   });
 });
 
