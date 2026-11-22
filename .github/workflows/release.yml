@@ -38,13 +38,13 @@ jobs:
         with:
           fetch-depth: 0 # changesets needs full history to diff against published versions
           persist-credentials: false
+      # Node 24 bundles npm 11.5.1 or newer, which npm trusted publishing needs.
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version-file: .nvmrc
+          node-version: 24
           cache: npm
           registry-url: https://registry.npmjs.org
       - run: npm ci
-      - run: npm install -g npm@11.21.3
 
       - name: Version Packages PR or publish
         id: version
