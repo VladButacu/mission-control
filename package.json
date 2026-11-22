@@ -51,7 +51,7 @@
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:all": "npm test && npm run test:integration",
     "test:packed": "node --experimental-strip-types --experimental-transform-types --disable-warning=ExperimentalWarning scripts/packed-package-smoke.mjs",
-    "lint": "eslint src tests",
+    "lint": "eslint src tests --max-warnings 0",
     "fix:lint": "eslint src tests --fix",
     "typecheck": "tsc --noEmit && tsc --noEmit -p src/ui/tsconfig.json",
     "knip": "knip",
