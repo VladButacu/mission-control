@@ -23,6 +23,8 @@ npm run check   # lint, typecheck, tests, knip, build
 
 The pre-commit hook only applies a fast lint fix to staged files. The full gate runs in CI, so always run `npm run check` before pushing.
 
+Code must pass ESLint with no warnings and TypeScript in strict mode, as configured in `eslint.config.js` and `tsconfig.base.json`, and follow the repo rules in `AGENTS.md`.
+
 ## Submitting a change
 
 1. For anything beyond a small fix, open an issue first to discuss it.
