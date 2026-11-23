@@ -91,7 +91,7 @@
     "eslint": "^10.15.0",
     "fast-check": "4.10.3",
     "globals": "^17.14.0",
-    "knip": "^6.46.0",
+    "knip": "^6.46.1",
     "playwright": "^1.65.1",
     "preact-render-to-string": "^6.8.3",
     "supertest": "^7.3.2",
